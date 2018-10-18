@@ -20,7 +20,7 @@ public class ApproximatedPartition {
     }
 
     public List<Integer> createApproximatedPartition() {
-        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1], this.size); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
+        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1]+1, this.size); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
         List<Window> windows = new ArrayList<>();
         long minimumCost = CostEvaluation.evaluateCost(1, 1);
         long costBound = minimumCost;
@@ -66,8 +66,7 @@ public class ApproximatedPartition {
             n = steps[n].from;
 
         }
-
-        this.cost = PartitionedEliasFano.getCompressionCost(this.partition, this.nodes);
+        this.cost = steps[steps.length - 1].weight;
 
         return this.partition;
 

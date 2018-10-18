@@ -28,7 +28,7 @@ public class PartitionedEliasFano {
                 node = random.nextInt(graph.numNodes());
             int[] successors = graph.successorArray(node);
 
-            if(successors.length > graph.outdegree(node))
+            if (successors.length > graph.outdegree(node))
                 successors = Arrays.copyOfRange(successors, 0, graph.outdegree(node));
             System.out.println("Testing on " + args[0] + " on node " + node + " with out-degree " + successors.length);
 
@@ -61,7 +61,7 @@ public class PartitionedEliasFano {
                 e.printStackTrace();
                 for (int j = 0; j < this.listToCompress.length; j++) {
                     System.out.print(this.listToCompress[j]);
-                    if(j+1<this.listToCompress.length)
+                    if (j + 1 < this.listToCompress.length)
                         System.out.print(", ");
                 }
                 System.out.println();
@@ -111,7 +111,7 @@ public class PartitionedEliasFano {
         System.out.println("Upper bound for Approximated Partition cost: " + df3.format(upperBound));
         System.out.println("Approximated Partition cost: " + opt.getCost() + " bits");
         System.out.println("(1+ε1)(1+ε2) = " + df3.format((1 + ApproximatedPartition.EPS_1) * (1 + ApproximatedPartition.EPS_2)));
-        System.out.println("Approximated Partition /PartitionedEliasFano = " + df3.format((double) opt.getCost() / pefCost));
+        System.out.println("Approximated Partition / PartitionedEliasFano = " + df3.format((double) opt.getCost() / pefCost));
         boolean brokeLimit = (opt.getCost() > upperBound);
 
         if (brokeLimit) {
@@ -127,7 +127,7 @@ public class PartitionedEliasFano {
     private static List<Integer> getShortestPath(int[] list) {
         StepInPath[] steps = new StepInPath[list.length + 1];
 
-        final long maxWeight = getWeight(list, 0, list.length);
+        final long maxWeight = CostEvaluation.evaluateCost(list[list.length - 1] + 1, list.length);
 
         for (int i = 0; i < steps.length; i++) {
             steps[i] = new StepInPath();

@@ -1,51 +1,51 @@
 package com.gioaudino.thesis;
 
 public class Window {
-    int[] values;
+    private int[] values;
     long maxCost;
-    int start = 0;
+    private int start = 0;
     int end = 0;
-    int minP;
-    int maxP = 0;
+    private int minP;
+    private int maxP = 0;
 
 
-    public Window(int[] values, long maxCost) {
+    Window(int[] values, long maxCost) {
         this.values = values;
         this.maxCost = maxCost;
         this.minP = this.getStart();
     }
 
-    public long universe() {
+    private long universe() {
         return this.maxP - this.minP + 1;
     }
 
-    public long size() {
+    private long size() {
         return this.end - this.start;
     }
 
-    public void advanceStart() {
+    void advanceStart() {
         minP = getStart() + 1;
         ++this.start;
     }
 
-    public void advanceEnd() {
+    void advanceEnd() {
         maxP = getEnd();
         this.end++;
     }
 
-    public long getCost() {
+    long getCost() {
         return getCost(this.size(), this.universe());
     }
 
-    public long getCost(long size, long universe) {
+    private long getCost(long size, long universe) {
         return CostEvaluation.evaluateCost(universe, size);
     }
 
-    public int getStart() {
+    private int getStart() {
         return this.values[this.start];
     }
 
-    public int getEnd() {
+    private int getEnd() {
         return this.values[this.end];
     }
 
