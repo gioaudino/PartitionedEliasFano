@@ -2,7 +2,7 @@ package com.gioaudino.thesis;
 
 public class CostEvaluation {
 
-    final static long FIXED_COST = 64;
+    private final static long FIXED_COST = 64 + 64 + 64;
 
     static long evaluateCost(long universe, long size) {
         if (universe == size)
