@@ -19,6 +19,9 @@ public class PartitionedEliasFano {
             System.exit(1);
         }
         ImmutableGraph graph = ImmutableGraph.load(args[0]);
+        if (args.length > 1 && args[1].equals("--all")) {
+            runForAll(graph);
+        }
         final int SAMPLES = args.length >= 2 ? Integer.parseInt(args[1]) : DEFAULT_SAMPLES;
 
         Random random = new Random();
@@ -28,13 +31,24 @@ public class PartitionedEliasFano {
                 node = random.nextInt(graph.numNodes());
             int[] successors = graph.successorArray(node);
 
-            if (successors.length > graph.outdegree(node))
-                successors = Arrays.copyOfRange(successors, 0, graph.outdegree(node));
+//            if (successors.length > graph.outdegree(node))
+            successors = Arrays.copyOfRange(successors, 0, graph.outdegree(node));
             System.out.println("Testing on " + args[0] + " on node " + node + " with out-degree " + successors.length);
 
             new ParallelRun(successors, node, i).run();
         }
         System.err.println(PartitionedEliasFano.count + " out of " + SAMPLES + " broke the upper bound - " + df3.format((double) PartitionedEliasFano.count / SAMPLES * 100) + "%");
+    }
+
+    private static void runForAll(ImmutableGraph graph) {
+        for (int node = 0; node < graph.numNodes(); node++) {
+            if (graph.outdegree(node) > 0) {
+                int[] successors = graph.successorArray(node);
+                successors = Arrays.copyOfRange(successors, 0, graph.outdegree(node));
+                System.out.println("Testing on node " + node + " with out-degree " + successors.length);
+                new ParallelRun(successors, node, node).run();
+            }
+        }
     }
 
     private static class ParallelRun extends Thread {
@@ -52,7 +66,7 @@ public class PartitionedEliasFano {
         @Override
         public void run() {
             try {
-                boolean broke = PartitionedEliasFano.run(this.listToCompress);
+                boolean broke = PartitionedEliasFano.run(this.listToCompress, this.node);
                 if (broke) {
                     System.err.println("Run " + this.i + " on node " + this.node + " with out-degree " + this.listToCompress.length + " broke the upper bound");
                     PartitionedEliasFano.count++;
@@ -69,22 +83,25 @@ public class PartitionedEliasFano {
         }
     }
 
-    static boolean run(int[] list) {
+    static boolean run(int[] list, int node) {
         List<Integer> listShortestPath = getShortestPath(list);
         ApproximatedPartition opt = new ApproximatedPartition(list);
         List<Integer> windowSP = opt.createApproximatedPartition();
 
+        DoubleBoundApproximatedPartition dbap = new DoubleBoundApproximatedPartition(list);
+        List<Integer> doubleBound = dbap.createDoubleBoundApproximatedPartition();
+
         System.out.println("Graph and Window are equal? " + listShortestPath.equals(windowSP));
 
         Iterator<Integer> iter = listShortestPath.iterator();
-        System.out.print("\nExact partition:\t");
+        System.out.print("\nExact partition:\t\t\t\t\t\t");
         while (iter.hasNext()) {
             System.out.print(iter.next());
             if (iter.hasNext())
                 System.out.print("\t->\t");
         }
 
-        System.out.print("\nApproximated partition:\t");
+        System.out.print("\nApproximated partition:\t\t\t\t\t");
         iter = windowSP.iterator();
         while (iter.hasNext()) {
             System.out.print(iter.next());
@@ -92,29 +109,44 @@ public class PartitionedEliasFano {
                 System.out.print("\t->\t");
         }
 
-        boolean brokeLimit = printStats(list, listShortestPath, opt);
+        System.out.print("\nApproximated partition w/ left bound:\t");
+        iter = doubleBound.iterator();
+        while (iter.hasNext()) {
+            System.out.print(iter.next());
+            if (iter.hasNext())
+                System.out.print("\t->\t");
+        }
+
+        boolean brokeLimit = printStats(node, list, listShortestPath, opt, dbap);
 
         System.out.println("\n-----------------------------------\n");
         return brokeLimit;
     }
 
-    private static boolean printStats(int[] list, List<Integer> graphShortestPath, ApproximatedPartition opt) {
+    private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, ApproximatedPartition ap, DoubleBoundApproximatedPartition dbap) {
         long pefCost = getCompressionCost(graphShortestPath, list);
         long efCost = CostEvaluation.eliasFanoCompressionCost(list[list.length - 1] + 1, list.length);
 
         System.out.println("\nCost of compression: " + pefCost + " bits");
         System.out.println("EF cost: " + efCost + " bits");
-        System.out.println("PartitionedEliasFano / EF = " + df3.format((float) (pefCost / efCost * 100)) + "%");
+        System.out.println("PartitionedEliasFano / EF = " + df3.format(((float) pefCost / efCost * 100)) + "%");
 
         long upperBound = (long) ((1 + ApproximatedPartition.EPS_1) * (1 + ApproximatedPartition.EPS_2) * pefCost);
 
         System.out.println("Upper bound for Approximated Partition cost: " + df3.format(upperBound));
-        System.out.println("Approximated Partition cost: " + opt.getCost() + " bits");
+        System.out.println("Approximated Partition cost: " + ap.getCost() + " bits");
         System.out.println("(1+ε1)(1+ε2) = " + df3.format((1 + ApproximatedPartition.EPS_1) * (1 + ApproximatedPartition.EPS_2)));
-        System.out.println("Approximated Partition / PartitionedEliasFano = " + df3.format((double) opt.getCost() / pefCost));
-        boolean brokeLimit = (opt.getCost() > upperBound);
+        System.out.println("Approximated Partition / PartitionedEliasFano = " + df3.format((double) ap.getCost() / pefCost));
+
+        System.out.println("\nApproximated partition with left bound for universe cost: " + dbap.getCost() + " bits");
+        System.out.println("Double bound approximated partition / Partitioned Elias Fano = " + df3.format((double) dbap.getCost() / pefCost));
+        System.out.println("Double bound approximated partition / Standard Approximated Partition = " + df3.format((double) dbap.getCost() / ap.getCost()));
+
+        System.out.println("\nfirst: " + list[0] + " - last: " + list[list.length - 1]);
+        boolean brokeLimit = (ap.getCost() > upperBound);
 
         if (brokeLimit) {
+            System.err.println("NODE " + node);
             for (int i = 0; i < list.length; i++) {
                 System.out.print(i + (i + 1 < list.length ? ", " : ""));
             }
@@ -163,8 +195,7 @@ public class PartitionedEliasFano {
 
     private static long getWeight(int[] list, int from, int to) {
         int universe = list[to - 1] + 1;
-        if (from > 0)
-            universe -= list[from - 1] + 1;
+            universe -= from > 0 ? list[from - 1] + 1 : list[from];
         int elements = to - from;
 
         return CostEvaluation.evaluateCost(universe, elements);

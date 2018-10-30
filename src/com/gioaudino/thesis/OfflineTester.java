@@ -1,22 +1,34 @@
 package com.gioaudino.thesis;
 
-import java.io.*;
+import java.io.IOException;
 
 public class OfflineTester {
     public static void main(String[] args) throws IOException {
-        BufferedReader br = new BufferedReader(new FileReader(args[0]));
-        String values = br.readLine();
-
-        String[] v = values.split(", ");
-        int[] nodes = new int[v.length];
-        for (int i = 0; i < v.length; i++) {
-            nodes[i] = Integer.parseInt(v[i]);
-        }
+//        BufferedReader br = new BufferedReader(new FileReader(args[0]));
+//        String values = br.readLine();
+//
+//        String[] v = values.split(", ");
+//        int[] nodes = new int[v.length];
+//        for (int i = 0; i < v.length; i++) {
+//            nodes[i] = Integer.parseInt(v[i]);
+//        }
 //        int[] nodes = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101};
+        int i;
+        int[] nodes = new int[300];
+        for (i = 0; i < 150; i++) {
+            nodes[i] = 50000 + i;
+            System.out.print((50000 + i) + ", ");
+        }
+        for (; i < 300; i++) {
+            nodes[i] = 60000 + i;
+            System.out.print((60000 + i) + ", ");
+        }
+        System.out.println();
+
 
         System.out.println("List of " + nodes.length);
 
-        PartitionedEliasFano.run(nodes);
+        PartitionedEliasFano.run(nodes, -1);
     }
 
 

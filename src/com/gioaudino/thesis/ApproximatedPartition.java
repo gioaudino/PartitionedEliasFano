@@ -1,7 +1,8 @@
 package com.gioaudino.thesis;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 public class ApproximatedPartition {
@@ -11,7 +12,7 @@ public class ApproximatedPartition {
 
     private int[] nodes;
     private int size;
-    private List<Integer> partition;
+    private IntArrayList partition;
     private long cost;
 
     public ApproximatedPartition(int[] nodes) {
@@ -19,8 +20,8 @@ public class ApproximatedPartition {
         this.size = nodes.length;
     }
 
-    public List<Integer> createApproximatedPartition() {
-        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1]+1, this.size); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
+    public IntArrayList createApproximatedPartition() {
+        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] + 1, this.size); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
         List<Window> windows = new ArrayList<>();
         long minimumCost = CostEvaluation.evaluateCost(1, 1);
         long costBound = minimumCost;
@@ -59,12 +60,11 @@ public class ApproximatedPartition {
             }
         }
         int n = steps.length - 1;
-        this.partition = new LinkedList<>();
+        this.partition = new IntArrayList();
         while (true) {
-            ((LinkedList<Integer>) this.partition).addFirst(n);
+            this.partition.add(0, n);
             if (steps[n].from == null) break;
             n = steps[n].from;
-
         }
         this.cost = steps[steps.length - 1].weight;
 

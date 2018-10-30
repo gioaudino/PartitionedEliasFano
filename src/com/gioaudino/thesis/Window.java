@@ -25,7 +25,7 @@ public class Window {
 
     void advanceStart() {
         minP = getStart() + 1;
-        ++this.start;
+        this.start++;
     }
 
     void advanceEnd() {

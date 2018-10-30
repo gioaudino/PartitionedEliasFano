@@ -3,13 +3,18 @@ package com.gioaudino.thesis;
 public class CostEvaluation {
 
     private final static long FIXED_COST = 64 + 64 + 64;
+    private final static long DOUBLE_BOUND_FIXED_COST = FIXED_COST + 64;
 
-    static long evaluateCost(long universe, long size) {
+    public static long evaluateCost(long universe, long size) {
+        return evaluateCost(universe, size, false);
+    }
+
+    public static long evaluateCost(long universe, long size, boolean hasDoubleBound) {
         if (universe == size)
-            return FIXED_COST;
+            return hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST;
         long efCost = eliasFanoCompressionCost(universe, size) + 1;
         long bitVectorCost = bitVectorCompressionCost(universe, size) + 1;
-        return FIXED_COST + Math.min(efCost, bitVectorCost);
+        return Math.min(efCost, bitVectorCost) + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
     }
 
     static long eliasFanoCompressionCost(long universe, long size) {
