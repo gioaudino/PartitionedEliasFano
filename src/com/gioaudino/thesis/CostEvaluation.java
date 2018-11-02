@@ -5,16 +5,28 @@ public class CostEvaluation {
     private final static long FIXED_COST = 64 + 64 + 64;
     private final static long DOUBLE_BOUND_FIXED_COST = FIXED_COST + 64;
 
-    public static long evaluateCost(long universe, long size) {
+    public static Cost evaluateCost(long universe, long size) {
         return evaluateCost(universe, size, false);
     }
 
-    public static long evaluateCost(long universe, long size, boolean hasDoubleBound) {
-        if (universe == size)
-            return hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST;
+    public static Cost evaluateCost(long universe, long size, boolean hasDoubleBound) {
+        Cost cost = new Cost();
+        if (universe == size) {
+            cost.cost =hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST;
+            cost.algorithm = Partition.Algorithm.NONE;
+            return cost;
+        }
         long efCost = eliasFanoCompressionCost(universe, size) + 1;
         long bitVectorCost = bitVectorCompressionCost(universe, size) + 1;
-        return Math.min(efCost, bitVectorCost) + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
+        if(efCost < bitVectorCost){
+            cost.cost = efCost + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
+            cost.algorithm = Partition.Algorithm.ELIASFANO;
+            return cost;
+        }
+        cost.cost = bitVectorCost + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
+        cost.algorithm = Partition.Algorithm.BITVECTOR;
+        return cost;
+
     }
 
     static long eliasFanoCompressionCost(long universe, long size) {
@@ -33,7 +45,7 @@ public class CostEvaluation {
         return lowerBitsOffset + size * lowerBits;
     }
 
-    private static long bitVectorCompressionCost(long universe, long size) {
+    static long bitVectorCompressionCost(long universe, long size) {
         short logRank1Sampling = 9;
         long rank1Samples = universe >> logRank1Sampling;
         long rank1SampleSize = (long) Math.ceil(log2(size + 1));

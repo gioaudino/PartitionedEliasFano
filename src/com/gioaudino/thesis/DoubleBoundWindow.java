@@ -33,7 +33,7 @@ public class DoubleBoundWindow {
     }
 
     private long getCost(long size, long universe) {
-        return CostEvaluation.evaluateCost(universe, size, true);
+        return CostEvaluation.evaluateCost(universe, size, true).cost;
     }
 
     private int getStart() {

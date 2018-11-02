@@ -21,9 +21,9 @@ public class DoubleBoundApproximatedPartition {
     }
 
     public IntArrayList createDoubleBoundApproximatedPartition() {
-        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] - this.nodes[0] + 1, this.size, true); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
+        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] - this.nodes[0] + 1, this.size, true).cost;
         List<DoubleBoundWindow> windows = new ArrayList<>();
-        long minimumCost = CostEvaluation.evaluateCost(1, 1, true);
+        long minimumCost = CostEvaluation.evaluateCost(1, 1, true).cost;
         long costBound = minimumCost;
         while (costBound < minimumCost / EPS_1) {
             windows.add(new DoubleBoundWindow(nodes, costBound));

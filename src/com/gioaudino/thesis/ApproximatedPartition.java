@@ -1,8 +1,7 @@
 package com.gioaudino.thesis;
 
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class ApproximatedPartition {
@@ -10,20 +9,13 @@ public class ApproximatedPartition {
     final static double EPS_1 = 0.03;
     final static double EPS_2 = 0.3;
 
-    private int[] nodes;
-    private int size;
-    private IntArrayList partition;
-    private long cost;
-
-    public ApproximatedPartition(int[] nodes) {
-        this.nodes = nodes;
-        this.size = nodes.length;
-    }
-
-    public IntArrayList createApproximatedPartition() {
-        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] + 1, this.size); //this.evaluateCost(this.nodes[this.nodes.length - 1], size);
+    public static List<Partition> createApproximatedPartition(int[] nodes) {
+        final int size = nodes.length;
+        if (size == 0)
+            return new ArrayList<>();
+        final long singleBlockCost = CostEvaluation.evaluateCost(nodes[nodes.length - 1] + 1, size).cost;
         List<Window> windows = new ArrayList<>();
-        long minimumCost = CostEvaluation.evaluateCost(1, 1);
+        long minimumCost = CostEvaluation.evaluateCost(1, 1).cost;
         long costBound = minimumCost;
         while (costBound < minimumCost / EPS_1) {
             windows.add(new Window(nodes, costBound));
@@ -40,40 +32,36 @@ public class ApproximatedPartition {
         steps[0].from = null;
         steps[0].weight = 0L;
 
-        for (int i = 0; i < this.size; i++) {
+        for (int i = 0; i < size; i++) {
             int lastEnd = i + 1;
             for (Window window : windows) {
                 while (window.end < lastEnd)
                     window.advanceEnd();
 
                 while (true) {
-                    long windowCost = window.getCost();
-                    if (steps[window.end].weight > steps[i].weight + windowCost) {
-                        steps[window.end].weight = steps[i].weight + windowCost;
+                    Cost windowCost = window.getCost();
+                    if (steps[window.end].weight > steps[i].weight + windowCost.cost) {
+                        steps[window.end].weight = steps[i].weight + windowCost.cost;
                         steps[window.end].from = i;
+                        steps[window.end].how = windowCost.algorithm;
                     }
                     lastEnd = window.end;
-                    if (window.end == size || windowCost >= window.maxCost) break;
+                    if (window.end == size || windowCost.cost >= window.maxCost) break;
                     window.advanceEnd();
                 }
                 window.advanceStart();
             }
         }
         int n = steps.length - 1;
-        this.partition = new IntArrayList();
-        while (true) {
-            this.partition.add(0, n);
-            if (steps[n].from == null) break;
+        LinkedList<Partition> partition = new LinkedList<>();
+        while (steps[n].from != null) {
+            partition.addFirst(new Partition(steps[n].from, n, steps[n].how, steps[steps.length - 1].weight));
+//            if (steps[n].from == null) break;
             n = steps[n].from;
         }
-        this.cost = steps[steps.length - 1].weight;
 
-        return this.partition;
+        return partition;
 
-    }
-
-    long getCost() {
-        return cost;
     }
 
 }

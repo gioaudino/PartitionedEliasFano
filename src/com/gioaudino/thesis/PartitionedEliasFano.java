@@ -85,13 +85,12 @@ public class PartitionedEliasFano {
 
     static boolean run(int[] list, int node) {
         List<Integer> listShortestPath = getShortestPath(list);
-        ApproximatedPartition opt = new ApproximatedPartition(list);
-        List<Integer> windowSP = opt.createApproximatedPartition();
+//        ApproximatedPartition opt = new ApproximatedPartition(list);
+        List<Partition> approximatedPartition = ApproximatedPartition.createApproximatedPartition(list);
 
         DoubleBoundApproximatedPartition dbap = new DoubleBoundApproximatedPartition(list);
         List<Integer> doubleBound = dbap.createDoubleBoundApproximatedPartition();
 
-        System.out.println("Graph and Window are equal? " + listShortestPath.equals(windowSP));
 
         Iterator<Integer> iter = listShortestPath.iterator();
         System.out.print("\nExact partition:\t\t\t\t\t\t");
@@ -102,10 +101,11 @@ public class PartitionedEliasFano {
         }
 
         System.out.print("\nApproximated partition:\t\t\t\t\t");
-        iter = windowSP.iterator();
-        while (iter.hasNext()) {
-            System.out.print(iter.next());
-            if (iter.hasNext())
+        Iterator<Partition> piter = approximatedPartition.iterator();
+        System.out.print(approximatedPartition.get(0).from + "\t->\t");
+        while (piter.hasNext()) {
+            System.out.print(piter.next().to);
+            if (piter.hasNext())
                 System.out.print("\t->\t");
         }
 
@@ -117,13 +117,13 @@ public class PartitionedEliasFano {
                 System.out.print("\t->\t");
         }
 
-        boolean brokeLimit = printStats(node, list, listShortestPath, opt, dbap);
+        boolean brokeLimit = printStats(node, list, listShortestPath, approximatedPartition, dbap);
 
         System.out.println("\n-----------------------------------\n");
         return brokeLimit;
     }
 
-    private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, ApproximatedPartition ap, DoubleBoundApproximatedPartition dbap) {
+    private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, List<Partition> ap, DoubleBoundApproximatedPartition dbap) {
         long pefCost = getCompressionCost(graphShortestPath, list);
         long efCost = CostEvaluation.eliasFanoCompressionCost(list[list.length - 1] + 1, list.length);
 
@@ -134,16 +134,16 @@ public class PartitionedEliasFano {
         long upperBound = (long) ((1 + ApproximatedPartition.EPS_1) * (1 + ApproximatedPartition.EPS_2) * pefCost);
 
         System.out.println("Upper bound for Approximated Partition cost: " + df3.format(upperBound));
-        System.out.println("Approximated Partition cost: " + ap.getCost() + " bits");
+        System.out.println("Approximated Partition cost: " + ap.get(0).allCost + " bits");
         System.out.println("(1+ε1)(1+ε2) = " + df3.format((1 + ApproximatedPartition.EPS_1) * (1 + ApproximatedPartition.EPS_2)));
-        System.out.println("Approximated Partition / PartitionedEliasFano = " + df3.format((double) ap.getCost() / pefCost));
+        System.out.println("Approximated Partition / PartitionedEliasFano = " + df3.format((double) ap.get(0).allCost / pefCost));
 
         System.out.println("\nApproximated partition with left bound for universe cost: " + dbap.getCost() + " bits");
         System.out.println("Double bound approximated partition / Partitioned Elias Fano = " + df3.format((double) dbap.getCost() / pefCost));
-        System.out.println("Double bound approximated partition / Standard Approximated Partition = " + df3.format((double) dbap.getCost() / ap.getCost()));
+        System.out.println("Double bound approximated partition / Standard Approximated Partition = " + df3.format((double) dbap.getCost() / ap.get(0).allCost));
 
         System.out.println("\nfirst: " + list[0] + " - last: " + list[list.length - 1]);
-        boolean brokeLimit = (ap.getCost() > upperBound);
+        boolean brokeLimit = (ap.get(0).allCost > upperBound);
 
         if (brokeLimit) {
             System.err.println("NODE " + node);
@@ -159,7 +159,7 @@ public class PartitionedEliasFano {
     private static List<Integer> getShortestPath(int[] list) {
         StepInPath[] steps = new StepInPath[list.length + 1];
 
-        final long maxWeight = CostEvaluation.evaluateCost(list[list.length - 1] + 1, list.length);
+        final long maxWeight = CostEvaluation.evaluateCost(list[list.length - 1] + 1, list.length).cost;
 
         for (int i = 0; i < steps.length; i++) {
             steps[i] = new StepInPath();
@@ -198,7 +198,7 @@ public class PartitionedEliasFano {
             universe -= from > 0 ? list[from - 1] + 1 : list[from];
         int elements = to - from;
 
-        return CostEvaluation.evaluateCost(universe, elements);
+        return CostEvaluation.evaluateCost(universe, elements).cost;
     }
 
     static long getCompressionCost(List<Integer> partition, int[] list) {

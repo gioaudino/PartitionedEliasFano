@@ -33,11 +33,11 @@ public class Window {
         this.end++;
     }
 
-    long getCost() {
+    Cost getCost() {
         return getCost(this.size(), this.universe());
     }
 
-    private long getCost(long size, long universe) {
+    private Cost getCost(long size, long universe) {
         return CostEvaluation.evaluateCost(universe, size);
     }
 
