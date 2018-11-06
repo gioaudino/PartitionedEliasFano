@@ -1456,33 +1456,27 @@ public class PEFGraph extends ImmutableGraph {
 
     protected final static class PartitionedEliasFanoIterator extends AbstractLazyIntIterator implements LazyIntSkippableIterator {
         private final int nodes;
-        private int node;
-        private int offset;
         private int last;
-        private int currentIndex;
+        private int nextIndex;
         private final int outdegree;
         private final int lowerbound;
-        private final int indexNext;
         private final int log2Quantum;
         private final LongBigList graph;
         private final LongWordBitReader graphBitReader;
         private final long[] firstlevel;
         private int[] successors;
 
-        public PartitionedEliasFanoIterator(int nodes, int node, int offset, LongBigList graph, long[] firstlevel, int indexNext, int log2Quantum) {
+        public PartitionedEliasFanoIterator(int nodes, LongBigList graph, long outdegree, long lowerbound, long[] firstlevel, int log2Quantum) {
             this.nodes = nodes;
-            this.node = node;
-            this.offset = offset;
             this.graph = graph;
 
-            this.outdegree = (int) firstlevel[0];
-            this.lowerbound = (int) firstlevel[1];
-            this.firstlevel = Arrays.copyOfRange(firstlevel, 2, firstlevel.length);
+            this.outdegree = (int) outdegree;
+            this.lowerbound = (int) lowerbound;
+            this.firstlevel = firstlevel;
             this.log2Quantum = log2Quantum;
             this.graphBitReader = new LongWordBitReader(graph, pointerSize(outdegree + 1, firstlevel[firstlevel.length - 3]));
 
-            this.indexNext = indexNext;
-            successors = new int[outdegree];
+            successors = new int[this.outdegree];
             this.decompress();
         }
 
@@ -1517,21 +1511,72 @@ public class PEFGraph extends ImmutableGraph {
         }
 
         @Override
-        public int skipTo(int i) {
-            return 0;
+        public int skipTo(int lowerbound) {
+            if (last >= lowerbound) return last;
+            int n;
+            while ((n = nextInt()) < lowerbound) ;
+            return n;
         }
 
         @Override
         public int nextInt() {
-            return 0;
-//            if(currentIndex > )
+            if (nextIndex >= outdegree) {
+                last = END_OF_LIST;
+                return -1;
+            }
+            return last = successors[nextIndex++];
         }
 
     }
 
     @Override
     public LazyIntSkippableIterator successors(final int x) {
-        return new EliasFanoSuccessorReader(n, upperBound, graph, outdegree(x), cachedPointer, log2Quantum);
+        int start = (int) this.offsets.getLong(x);
+        return new PartitionedEliasFanoIterator(n, graph, this.firstlevels[start], this.firstlevels[start + 1], Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length), log2Quantum);
+    }
+
+    public boolean adj(final int x, final int y) {
+        if (x > n || y > n) return false;
+        int start = (int) this.offsets.getLong(x);
+        final long outdegree = this.firstlevels[start];
+
+        if (outdegree == 0) return false;
+
+        final long lowerbound = this.firstlevels[start + 1];
+        long[] firstlevel = Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length);
+
+        if (y < lowerbound || y > firstlevel[firstlevel.length - 3]) return false;
+
+        start = 0;
+        while (start < firstlevel.length && firstlevel[start] < y)
+            start += 3;
+        start -= 3;
+
+        long lb = start - 3 >= 0 ? firstlevel[start - 3] : lowerbound;
+        long max = firstlevel[start];
+        long size = firstlevel[start + 1];
+        long index = firstlevel[start + 2];
+
+        if (size == max - lb) { // list contains all elements between lb and max, therefore also y
+            return true;
+        }
+        LongWordBitReader bitReader = new LongWordBitReader(graph, pointerSize(outdegree + 1, firstlevel[firstlevel.length - 3]));
+
+        if (bitReader.extractInternal(1) != 0) { // list encoded with Elias Fano
+            EliasFanoSuccessorReader efReader = new EliasFanoSuccessorReader(size, (int) (max - lowerbound), graph, size, index, log2Quantum);
+            return y == efReader.skipTo(y);
+        }
+
+        // list encoded with bit map
+        bitReader.position(index);
+        int last = (int) lowerbound;
+        for(int i = 0; i < size; i++){
+            last += bitReader.readUnary();
+            if(last == y) return true;
+            if(last > y) return false;
+        }
+
+        return false;
     }
 
     @Override
