@@ -10,6 +10,7 @@ public class StepInPath {
         return "StepInPath{" +
                 "weight=" + weight +
                 ", from=" + from +
+                ", how=" + how +
                 '}';
     }
 }

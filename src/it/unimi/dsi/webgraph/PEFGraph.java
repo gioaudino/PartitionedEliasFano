@@ -2,6 +2,7 @@ package it.unimi.dsi.webgraph;
 
 
 import com.gioaudino.thesis.ApproximatedPartition;
+import com.gioaudino.thesis.CostEvaluation;
 import com.gioaudino.thesis.Partition;
 import com.martiansoftware.jsap.*;
 import it.unimi.dsi.Util;
@@ -879,14 +880,8 @@ public class PEFGraph extends ImmutableGraph {
                 pl.logger().info("Pointer bits per node: " + Util.format(((EliasFanoMonotoneLongBigList) offsets).numBits() / (n + 1.0)));
         }
 
-        FileInputStream firstlevelIS = new FileInputStream(basename + FIRST_LEVEL_EXTENSION);
-        ObjectInputStream fstOIS = new ObjectInputStream(firstlevelIS);
-        long[] firstlevels;
-        try {
-            firstlevels = (long[]) fstOIS.readObject();
-        } catch (ClassNotFoundException e) {
-            throw new IOException("This class (" + PEFGraph.class.getName() + ") cannot load graph without .fst file");
-        }
+        long[] firstlevels = BinIO.loadLongs(basename + FIRST_LEVEL_EXTENSION);
+
 
         return new PEFGraph(basename, n, m, upperBound, log2Quantum, graph, offsets, firstlevels);
     }
@@ -921,19 +916,10 @@ public class PEFGraph extends ImmutableGraph {
         final FileChannel graphChannel = graphOs.getChannel();
         final LongWordOutputBitStream graphStream = new LongWordOutputBitStream(graphChannel, byteOrder);
         final OutputBitStream offsets = new OutputBitStream(basename + OFFSETS_EXTENSION);
-//        final long[] offsets = new long[graph.numNodes()];
-//
-//        final FileOutputStream offsetsOs = new FileOutputStream(basename + OFFSETS_EXTENSION);
-//        final FileChannel offsetsChannel = offsetsOs.getChannel();
-//        final LongWordOutputBitStream offsetStream = new LongWordOutputBitStream(offsetsChannel, byteOrder);
-
-
-        int nodeOffset = 0;
-        int nextNode = 0;
         long numberOfArcs = 0;
         long bitsForOutdegrees = 0;
         long bitsForSuccessors = 0;
-//        offsets.writeLongDelta(0);
+        offsets.writeLongDelta(0);
 
         if (pl != null) {
             pl.itemsName = "nodes";
@@ -955,59 +941,51 @@ public class PEFGraph extends ImmutableGraph {
          */
 
         LongArrayList firstLevels = new LongArrayList();
-//		long nextSecondLevelList = 0;
-
         for (NodeIterator nodeIterator = graph.nodeIterator(); nodeIterator.hasNext(); ) {
-            offsets.writeLongDelta(nodeOffset);
+            int nodeDelta = 0;
             nodeIterator.nextInt();
-
             final long outdegree = nodeIterator.outdegree();
             numberOfArcs += outdegree;
-//            final int outdegreeBits = graphStream.writeGamma(outdegree);
-            bitsForOutdegrees += Long.SIZE; //outdegreeBits;
+            bitsForOutdegrees += Long.SIZE;
             int[] successors = nodeIterator.successorArray();
             successors = Arrays.copyOf(successors, nodeIterator.outdegree());
             List<Partition> partition = ApproximatedPartition.createApproximatedPartition(successors);
 
             firstLevels.add(outdegree);
-            firstLevels.add(outdegree > 0 ? successors[0] : 0);
+            if (outdegree == 0) {
+                offsets.writeLongDelta(1);
+                continue;
+            }
+            firstLevels.add(successors[0]);
 
-            nodeOffset += 2;
+            nodeDelta += 2;
 
-            long lowerbound = 0;
-            if (outdegree > 0)
-                lowerbound = successors[0];
+            long lowerbound = successors[0];
 
             for (Partition subset : partition) {
-                firstLevels.add(subset.to);
+                firstLevels.add(successors[subset.to - 1]);
                 firstLevels.add(subset.to - subset.from);
                 if (subset.algorithm == Partition.Algorithm.NONE) {
-                    firstLevels.add(Long.MAX_VALUE);
+                    nodeDelta += 2;
                     continue;
                 }
 
                 firstLevels.add(bitsForSuccessors);
-                nodeOffset += 3;
-
-                LongArrayBitVector bv = LongArrayBitVector.ofLength(1);
-                bv.set(0, subset.algorithm == Partition.Algorithm.ELIASFANO);
-                graphStream.append(bv);
+                nodeDelta += 3;
 
                 if (subset.algorithm == Partition.Algorithm.BITVECTOR) {
-                    LongArrayBitVector bitVector = LongArrayBitVector.ofLength(subset.to - lowerbound);
-                    int nextValue = subset.from;
-                    for (int i = 0; i < subset.to - lowerbound; i++) {
-                        bitVector.set(i, successors[i + subset.from] == successors[nextValue]);
-                        if (successors[i + subset.from] == successors[nextValue]) {
-                            nextValue++;
-                        }
+                    LongArrayBitVector bitVector = LongArrayBitVector.ofLength(successors[subset.to - 1] - lowerbound + 1);
+
+                    for (int i = subset.from; i < subset.to; i++) {
+                        bitVector.set(successors[i] - successors[subset.from], true);
                     }
+
                     graphStream.append(bitVector);
                     bitsForSuccessors += bitVector.length();
                 }
 
                 if (subset.algorithm == Partition.Algorithm.ELIASFANO) {
-                    successorsAccumulator.init(subset.to - lowerbound, subset.to, false, true, log2Quantum);
+                    successorsAccumulator.init(subset.to - subset.from, successors[successors.length - 1] + 1, false, true, log2Quantum);
                     for (int i = subset.from; i < subset.to; i++) {
                         successorsAccumulator.add(successors[i] - lowerbound);
                         lowerbound = successors[i];
@@ -1017,23 +995,14 @@ public class PEFGraph extends ImmutableGraph {
                 }
             }
 
-
-//			final LazyIntIterator successors = nodeIterator.successors();
-//			for (long successor; (successor = successors.nextInt()) != -1;) {
-//				successorsAccumulator.add(successor - lastSuccessor);
-//				lastSuccessor = successor;
-//			}
-
-//            final long successorsBits = successorsAccumulator.dump(graphStream);
-//            bitsForSuccessors += successorsBits;
-//            offsets.writeLongDelta(outdegreeBits + successorsBits);
-
+            offsets.writeLongDelta(nodeDelta);
             if (pl != null) pl.lightUpdate();
         }
 
-        FileOutputStream fos = new FileOutputStream(basename + FIRST_LEVEL_EXTENSION);
-        ObjectOutputStream oos = new ObjectOutputStream(fos);
-        oos.writeObject(firstLevels.toArray());
+
+        long a[] = new long[firstLevels.size()];
+
+        BinIO.storeLongs(firstLevels.toArray(a), 0, firstLevels.size(), basename + FIRST_LEVEL_EXTENSION);
 
         successorsAccumulator.close();
         graphStream.close();
@@ -1455,66 +1424,74 @@ public class PEFGraph extends ImmutableGraph {
 
 
     protected final static class PartitionedEliasFanoIterator extends AbstractLazyIntIterator implements LazyIntSkippableIterator {
-        private final int nodes;
         private int last;
         private int nextIndex;
         private final int outdegree;
         private final int lowerbound;
         private final int log2Quantum;
         private final LongBigList graph;
-        private final LongWordBitReader graphBitReader;
         private final long[] firstlevel;
         private int[] successors;
 
-        public PartitionedEliasFanoIterator(int nodes, LongBigList graph, long outdegree, long lowerbound, long[] firstlevel, int log2Quantum) {
-            this.nodes = nodes;
+        public PartitionedEliasFanoIterator(LongBigList graph, long outdegree, long lowerbound, long[] firstlevel, int log2Quantum) {
             this.graph = graph;
 
             this.outdegree = (int) outdegree;
             this.lowerbound = (int) lowerbound;
             this.firstlevel = firstlevel;
             this.log2Quantum = log2Quantum;
-            this.graphBitReader = new LongWordBitReader(graph, pointerSize(outdegree + 1, firstlevel[firstlevel.length - 3]));
 
             successors = new int[this.outdegree];
-            this.decompress();
+            if (outdegree > 0)
+                this.decompress();
         }
 
         private void decompress() {
-            int lowerbound = this.lowerbound, next = 0;
-            for (int fst = 0; fst < firstlevel.length; fst += 3) {
-                int max = (int) firstlevel[fst];
-                int size = (int) firstlevel[fst + 1];
-                int index = (int) firstlevel[fst + 2];
 
-                if (max - lowerbound == size) {
+            int lowerbound = this.lowerbound;
+            int next = 0;
+            final LongArrayList fstlevel = new LongArrayList(this.firstlevel);
+            final LongListIterator iterator = fstlevel.listIterator(0);
+            while (iterator.hasNext()) {
+                final int max = (int) iterator.nextLong();
+                final int size = (int) iterator.nextLong();
+
+                final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+
+                if (algorithm == Partition.Algorithm.NONE) {
                     for (int i = 0; i < size; i++) {
                         successors[next++] = lowerbound + i;
                     }
-                } else if (graphBitReader.extractInternal(1) != 0) { // next list is compressed with Elias Fano
-                    EliasFanoSuccessorReader efReader = new EliasFanoSuccessorReader(nodes, max - lowerbound, graph, size, index, log2Quantum);
-                    int n;
-                    while ((n = efReader.nextInt()) != -1) {
-                        successors[next++] = lowerbound + n;
-                    }
-                } else { // next list is a bit map
+                }
+                if (algorithm == Partition.Algorithm.BITVECTOR) {
+                    final long index = iterator.nextLong();
+                    LongWordBitReader graphBitReader = new LongWordBitReader(graph, pointerSize(size, max + 1));
                     graphBitReader.position(index);
                     long last = lowerbound + graphBitReader.readUnary();
                     successors[next++] = (int) last;
-                    for (int i = size - 1; i > 0; i--) {
+                    for (int i = 1; i < size; i++) {
                         last += graphBitReader.readUnary() + 1;
                         successors[next++] = (int) last;
                     }
                 }
+                if (algorithm == Partition.Algorithm.ELIASFANO) {
+                    final int index = (int) iterator.nextLong();
+                    EliasFanoSuccessorReader efReader = new EliasFanoSuccessorReader(size, max + 1, graph, size, index, log2Quantum);
+                    for (int i = 0; i < size; i++) {
+                        int n = efReader.nextInt();
+                        successors[next++] = lowerbound + n;
+                    }
+                }
                 lowerbound = max + 1;
             }
+
         }
 
         @Override
         public int skipTo(int lowerbound) {
             if (last >= lowerbound) return last;
             int n;
-            while ((n = nextInt()) < lowerbound) ;
+            while ((n = nextInt()) < lowerbound && n > 0) ;
             return n;
         }
 
@@ -1531,15 +1508,18 @@ public class PEFGraph extends ImmutableGraph {
 
     @Override
     public LazyIntSkippableIterator successors(final int x) {
-        int start = (int) this.offsets.getLong(x);
-        return new PartitionedEliasFanoIterator(n, graph, this.firstlevels[start], this.firstlevels[start + 1], Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length), log2Quantum);
+        final int start = (int) this.offsets.getLong(x);
+        final int outdegree = (int) firstlevels[start];
+        if (outdegree == 0) {
+            return new EliasFanoSuccessorReader(n, n, graph, 0, 0, log2Quantum);
+        }
+        return new PartitionedEliasFanoIterator(graph, this.firstlevels[start], this.firstlevels[start + 1], Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length), log2Quantum);
     }
 
     public boolean adj(final int x, final int y) {
         if (x > n || y > n) return false;
         int start = (int) this.offsets.getLong(x);
         final long outdegree = this.firstlevels[start];
-
         if (outdegree == 0) return false;
 
         final long lowerbound = this.firstlevels[start + 1];
@@ -1557,7 +1537,7 @@ public class PEFGraph extends ImmutableGraph {
         long size = firstlevel[start + 1];
         long index = firstlevel[start + 2];
 
-        if (size == max - lb) { // list contains all elements between lb and max, therefore also y
+        if (size == max - lb + 1) { // list contains all elements between lb and max, therefore also y
             return true;
         }
         LongWordBitReader bitReader = new LongWordBitReader(graph, pointerSize(outdegree + 1, firstlevel[firstlevel.length - 3]));
@@ -1570,10 +1550,10 @@ public class PEFGraph extends ImmutableGraph {
         // list encoded with bit map
         bitReader.position(index);
         int last = (int) lowerbound;
-        for(int i = 0; i < size; i++){
+        for (int i = 0; i < size; i++) {
             last += bitReader.readUnary();
-            if(last == y) return true;
-            if(last > y) return false;
+            if (last == y) return true;
+            if (last > y) return false;
         }
 
         return false;

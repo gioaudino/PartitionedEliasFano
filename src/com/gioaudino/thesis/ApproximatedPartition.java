@@ -13,7 +13,8 @@ public class ApproximatedPartition {
         final int size = nodes.length;
         if (size == 0)
             return new ArrayList<>();
-        final long singleBlockCost = CostEvaluation.evaluateCost(nodes[nodes.length - 1] + 1, size).cost;
+        final Cost singleBlock = CostEvaluation.evaluateCost(nodes[nodes.length - 1] + 1, size);
+        final long singleBlockCost = singleBlock.cost;
         List<Window> windows = new ArrayList<>();
         long minimumCost = CostEvaluation.evaluateCost(1, 1).cost;
         long costBound = minimumCost;
@@ -31,6 +32,7 @@ public class ApproximatedPartition {
         }
         steps[0].from = null;
         steps[0].weight = 0L;
+        steps[steps.length-1].how = singleBlock.algorithm;
 
         for (int i = 0; i < size; i++) {
             int lastEnd = i + 1;

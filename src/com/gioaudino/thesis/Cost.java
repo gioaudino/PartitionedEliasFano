@@ -2,7 +2,7 @@ package com.gioaudino.thesis;
 
 public class Cost {
     long cost;
-    Partition.Algorithm algorithm;
+    public Partition.Algorithm algorithm;
 
     @Override
     public String toString() {

@@ -16,8 +16,8 @@ public class CostEvaluation {
             cost.algorithm = Partition.Algorithm.NONE;
             return cost;
         }
-        long efCost = eliasFanoCompressionCost(universe, size) + 1;
-        long bitVectorCost = bitVectorCompressionCost(universe, size) + 1;
+        long efCost = eliasFanoCompressionCost(universe, size);
+        long bitVectorCost = bitVectorCompressionCost(universe, size);
         if(efCost < bitVectorCost){
             cost.cost = efCost + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
             cost.algorithm = Partition.Algorithm.ELIASFANO;
@@ -36,9 +36,7 @@ public class CostEvaluation {
         short logSampling0 = 9; // ?
         long pointers0 = (higherBitsLength - size) >> logSampling0;
         long pointerSize = (long) Math.ceil(log2(higherBitsLength));
-        long baseOffset = 0;
-        long pointers0Ofsset = baseOffset;
-        long pointers1Offset = pointers0Ofsset + pointers0 * pointerSize;
+        long pointers1Offset = pointers0 * pointerSize;
         long higherBitsOffsets = pointers1Offset + pointers0 * pointerSize;
         long lowerBitsOffset = higherBitsOffsets + higherBitsLength;
 
@@ -49,11 +47,9 @@ public class CostEvaluation {
         short logRank1Sampling = 9;
         long rank1Samples = universe >> logRank1Sampling;
         long rank1SampleSize = (long) Math.ceil(log2(size + 1));
-        long baseOffset = 0;
-        long rank1SamplesOffset = baseOffset;
         long pointer_size = (long) Math.ceil(log2(universe));
         long pointers1 = size >> logRank1Sampling;
-        long pointers1Offset = rank1SamplesOffset + rank1Samples * rank1SampleSize;
+        long pointers1Offset = rank1Samples * rank1SampleSize;
         long bitsOffset = pointers1Offset + pointers1 * pointer_size;
 
         return bitsOffset + universe;

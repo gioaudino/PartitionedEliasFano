@@ -1,35 +1,54 @@
 package com.gioaudino.thesis;
 
+import it.unimi.dsi.webgraph.ImmutableGraph;
+import it.unimi.dsi.webgraph.NodeIterator;
+
 import java.io.IOException;
+import java.util.Arrays;
 
 public class OfflineTester {
     public static void main(String[] args) throws IOException {
-//        BufferedReader br = new BufferedReader(new FileReader(args[0]));
-//        String values = br.readLine();
-//
-//        String[] v = values.split(", ");
-//        int[] nodes = new int[v.length];
-//        for (int i = 0; i < v.length; i++) {
-//            nodes[i] = Integer.parseInt(v[i]);
-//        }
-//        int[] nodes = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101};
-        int i;
-        int[] nodes = new int[300];
-        for (i = 0; i < 150; i++) {
-            nodes[i] = 50000 + i;
-            System.out.print((50000 + i) + ", ");
-        }
-        for (; i < 300; i++) {
-            nodes[i] = 60000 + i;
-            System.out.print((60000 + i) + ", ");
-        }
-        System.out.println();
+        System.out.println("Loading graph 1 <" + args[0] + ">");
+        ImmutableGraph graph = ImmutableGraph.load(args[0]);
+        System.out.println("Loading graph 2 <" + args[1] + ">");
+        ImmutableGraph graph2 = ImmutableGraph.load(args[1]);
 
+        System.out.println("Nodes:\n\tg1: " + graph.numNodes() + " - g2: " + graph2.numNodes());
 
-        System.out.println("List of " + nodes.length);
+        System.out.println(Arrays.toString(graph.successorArray(0)));
+        System.out.println(Arrays.toString(graph2.successorArray(0)));
+//        check(graph, graph2);
 
-        PartitionedEliasFano.run(nodes, -1);
+        System.out.println(String.format("Graphs <%s> and <%s> are %s", args[0], args[1], graph.equals(graph2) ? "EQUAL" : "NOT EQUAL"));
     }
 
+    static void check(ImmutableGraph a, ImmutableGraph b) {
+        int n = a.numNodes();
+        if (n != b.numNodes()) {
+            System.out.println("NODES");
+        } else {
+            NodeIterator i = a.nodeIterator();
+            NodeIterator j = b.nodeIterator();
+
+            while (n-- != 0) {
+                int in = i.nextInt();
+                int jn = j.nextInt();
+                int d, c;
+                if ((d = i.outdegree()) != j.outdegree()) {
+                    System.out.println("OUTDEGREES: A: " + d + " B: " + j.outdegree());
+                }
+
+                int[] s = i.successorArray();
+                int[] t = j.successorArray();
+                c = d;
+                while (d-- != 0) {
+                    if (s[d] != t[d]) {
+                        System.out.println("SUCCESSOR " + (c - d) + " of node: " + in + " A: " + s[d] + " B: " + t[d]);
+                    }
+                }
+            }
+        }
+
+    }
 
 }
