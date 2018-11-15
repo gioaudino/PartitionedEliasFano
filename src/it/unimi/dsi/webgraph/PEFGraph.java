@@ -811,7 +811,7 @@ public class PEFGraph extends ImmutableGraph {
         else if (Integer.parseInt(properties.getProperty("version")) > EFGRAPH_VERSION)
             throw new IOException("This graph uses format " + properties.getProperty("version")
                     + ", but this class can understand only graphs up to format " + EFGRAPH_VERSION);
-        ;
+
         final long nodes = Long.parseLong(properties.getProperty("nodes"));
         if (nodes > Integer.MAX_VALUE)
             throw new IllegalArgumentException("The standard version of WebGraph cannot handle graphs with " + nodes + " (>2^31) nodes");
@@ -943,7 +943,7 @@ public class PEFGraph extends ImmutableGraph {
         LongArrayList firstLevels = new LongArrayList();
         for (NodeIterator nodeIterator = graph.nodeIterator(); nodeIterator.hasNext(); ) {
             int nodeDelta = 0;
-            nodeIterator.nextInt();
+            int n = nodeIterator.nextInt();
             final long outdegree = nodeIterator.outdegree();
             numberOfArcs += outdegree;
             bitsForOutdegrees += Long.SIZE;
@@ -967,6 +967,7 @@ public class PEFGraph extends ImmutableGraph {
                 firstLevels.add(subset.to - subset.from);
                 if (subset.algorithm == Partition.Algorithm.NONE) {
                     nodeDelta += 2;
+                    lowerbound = successors[subset.to-1]+1;
                     continue;
                 }
 
@@ -977,15 +978,14 @@ public class PEFGraph extends ImmutableGraph {
                     LongArrayBitVector bitVector = LongArrayBitVector.ofLength(successors[subset.to - 1] - lowerbound + 1);
 
                     for (int i = subset.from; i < subset.to; i++) {
-                        bitVector.set(successors[i] - successors[subset.from], true);
+                        bitVector.set(successors[i] - lowerbound, true);
                     }
-
                     graphStream.append(bitVector);
                     bitsForSuccessors += bitVector.length();
                 }
 
                 if (subset.algorithm == Partition.Algorithm.ELIASFANO) {
-                    successorsAccumulator.init(subset.to - subset.from, successors[successors.length - 1] + 1, false, true, log2Quantum);
+                    successorsAccumulator.init(subset.to - subset.from, successors[subset.to - 1] + 1, false, true, log2Quantum);
                     for (int i = subset.from; i < subset.to; i++) {
                         successorsAccumulator.add(successors[i] - lowerbound);
                         lowerbound = successors[i];
@@ -993,6 +993,7 @@ public class PEFGraph extends ImmutableGraph {
                     final long bitsForSubList = successorsAccumulator.dump(graphStream);
                     bitsForSuccessors += bitsForSubList;
                 }
+                lowerbound = successors[subset.to-1]+1;
             }
 
             offsets.writeLongDelta(nodeDelta);
@@ -1435,7 +1436,6 @@ public class PEFGraph extends ImmutableGraph {
 
         public PartitionedEliasFanoIterator(LongBigList graph, long outdegree, long lowerbound, long[] firstlevel, int log2Quantum) {
             this.graph = graph;
-
             this.outdegree = (int) outdegree;
             this.lowerbound = (int) lowerbound;
             this.firstlevel = firstlevel;

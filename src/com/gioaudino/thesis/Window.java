@@ -57,7 +57,7 @@ public class Window {
                 ", start=" + start +
                 ", end=" + end +
                 ", v.start=" + values[start] +
-                ", v.end=" + values[end] +
+                ", v.end=" + (end < values.length ? values[end] : "--") +
                 ", minP=" + minP +
                 ", maxP=" + maxP +
                 ", u=" + this.universe() +

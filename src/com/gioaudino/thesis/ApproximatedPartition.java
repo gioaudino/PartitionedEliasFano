@@ -13,7 +13,7 @@ public class ApproximatedPartition {
         final int size = nodes.length;
         if (size == 0)
             return new ArrayList<>();
-        final Cost singleBlock = CostEvaluation.evaluateCost(nodes[nodes.length - 1] + 1, size);
+        final Cost singleBlock = CostEvaluation.evaluateCost(nodes[nodes.length - 1] - nodes[0] + 1, size);
         final long singleBlockCost = singleBlock.cost;
         List<Window> windows = new ArrayList<>();
         long minimumCost = CostEvaluation.evaluateCost(1, 1).cost;
