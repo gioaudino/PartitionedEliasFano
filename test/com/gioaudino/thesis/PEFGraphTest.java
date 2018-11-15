@@ -2,16 +2,13 @@ package com.gioaudino.thesis;
 
 import it.unimi.dsi.webgraph.ArrayListMutableGraph;
 import it.unimi.dsi.webgraph.ImmutableGraph;
-import it.unimi.dsi.webgraph.NodeIterator;
 import it.unimi.dsi.webgraph.PEFGraph;
 import org.junit.Before;
-import org.junit.ComparisonFailure;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
@@ -58,7 +55,7 @@ public class PEFGraphTest {
                 {4, 2}, {4, 4}, {4, 5},
                 {5, 0}, {5, 5},
                 {6, 0}, {6, 2}, {6, 3},
-
+                // no successors for node 7
                 {8, 0}, {8, 4}, {8, 8}
 
         });
@@ -74,19 +71,6 @@ public class PEFGraphTest {
         ImmutableGraph or = ImmutableGraph.load(REAL_GRAPH);
         PEFGraph.store(or, ABSOLUTE_FILENAME);
         PEFGraph pef = PEFGraph.load(ABSOLUTE_FILENAME);
-
-        NodeIterator ornode = or.nodeIterator();
-        NodeIterator pefnode = pef.nodeIterator();
-        while (ornode.hasNext() && pefnode.hasNext()) {
-            int o = ornode.nextInt(), p = pefnode.nextInt();
-            assertEquals(o, p);
-            assertEquals(ornode.outdegree(), pefnode.outdegree());
-            try {
-                assertEquals(Arrays.toString(Arrays.copyOfRange(ornode.successorArray(), 0, ornode.outdegree())), Arrays.toString(Arrays.copyOfRange(pefnode.successorArray(), 0, pefnode.outdegree())));
-            } catch (ComparisonFailure f) {
-                System.err.println("NODE: " + o);
-                throw f;
-            }
-        }
+        assertEquals(or, pef);
     }
 }
