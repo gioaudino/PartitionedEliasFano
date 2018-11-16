@@ -949,7 +949,7 @@ public class PEFGraph extends ImmutableGraph {
             bitsForOutdegrees += Long.SIZE;
             int[] successors = nodeIterator.successorArray();
             successors = Arrays.copyOf(successors, nodeIterator.outdegree());
-            List<Partition> partition = ApproximatedPartition.createApproximatedPartition(successors);
+            List<Partition> partition = ApproximatedPartition.createApproximatedPartition(successors, log2Quantum);
 
             firstLevels.add(outdegree);
             if (outdegree == 0) {
@@ -1460,7 +1460,7 @@ public class PEFGraph extends ImmutableGraph {
                 final int max = (int) iterator.nextLong();
                 final int size = (int) iterator.nextLong();
 
-                final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+                final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm;
 
                 if (algorithm == Partition.Algorithm.NONE) {
                     for (int i = 0; i < size; i++) {
@@ -1540,7 +1540,7 @@ public class PEFGraph extends ImmutableGraph {
             if (y <= max) {
                 return skipToInChunk(lowerbound, (int) max, size, iterator, y) == y;
             }
-            final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+            final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm;
             switch (algorithm) {
                 case BITVECTOR:
                 case ELIASFANO:
@@ -1553,7 +1553,7 @@ public class PEFGraph extends ImmutableGraph {
     }
 
     private int skipToInChunk(long lowerbound, final int max, final long size, LongIterator iterator, final int target) {
-        final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+        final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm;
         if (algorithm == Partition.Algorithm.NONE && target <= max && target >= lowerbound) return target;
         final int index = (int) iterator.nextLong();
         if (algorithm == Partition.Algorithm.BITVECTOR) {
