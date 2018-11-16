@@ -954,6 +954,7 @@ public class PEFGraph extends ImmutableGraph {
             firstLevels.add(outdegree);
             if (outdegree == 0) {
                 offsets.writeLongDelta(1);
+                if (pl != null) pl.lightUpdate();
                 continue;
             }
             firstLevels.add(successors[0]);
@@ -967,7 +968,7 @@ public class PEFGraph extends ImmutableGraph {
                 firstLevels.add(subset.to - subset.from);
                 if (subset.algorithm == Partition.Algorithm.NONE) {
                     nodeDelta += 2;
-                    lowerbound = successors[subset.to-1]+1;
+                    lowerbound = successors[subset.to - 1] + 1;
                     continue;
                 }
 
@@ -993,7 +994,7 @@ public class PEFGraph extends ImmutableGraph {
                     final long bitsForSubList = successorsAccumulator.dump(graphStream);
                     bitsForSuccessors += bitsForSubList;
                 }
-                lowerbound = successors[subset.to-1]+1;
+                lowerbound = successors[subset.to - 1] + 1;
             }
 
             offsets.writeLongDelta(nodeDelta);
@@ -1020,6 +1021,7 @@ public class PEFGraph extends ImmutableGraph {
 
         final DecimalFormat format = new DecimalFormat("0.###");
         final long writtenBits = new File(basename + GRAPH_EXTENSION).length() * 8;
+        final long bitsForFirstLevel = new File(basename + FIRST_LEVEL_EXTENSION).length() * 8;
 
         final Properties properties = new Properties();
         properties.setProperty("nodes", String.valueOf(n));
@@ -1032,7 +1034,9 @@ public class PEFGraph extends ImmutableGraph {
         properties.setProperty("bitspernode", format.format((double) writtenBits / n));
         properties.setProperty("avgbitsforoutdegrees", format.format((double) bitsForOutdegrees / n));
         properties.setProperty("bitsforoutdegrees", Long.toString(bitsForOutdegrees));
+        properties.setProperty("bitsforfirstlevel", Long.toString(bitsForFirstLevel));
         properties.setProperty("bitsforsuccessors", Long.toString(bitsForSuccessors));
+        properties.setProperty("fullbitsperlink", format.format((double) (bitsForFirstLevel + writtenBits) / numberOfArcs));
         properties.setProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY, PEFGraph.class.getName());
         properties.setProperty("version", String.valueOf(EFGRAPH_VERSION));
         final FileOutputStream propertyFile = new FileOutputStream(basename + PROPERTIES_EXTENSION);
@@ -1522,41 +1526,47 @@ public class PEFGraph extends ImmutableGraph {
         final long outdegree = this.firstlevels[start];
         if (outdegree == 0) return false;
 
-        final long lowerbound = this.firstlevels[start + 1];
+        long lowerbound = this.firstlevels[start + 1];
+        if (y < lowerbound) return false;
+        if (y == lowerbound) return true;
         long[] firstlevel = Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length);
 
-        if (y < lowerbound || y > firstlevel[firstlevel.length - 3]) return false;
+        LongArrayList fstLongs = new LongArrayList(firstlevel);
+        LongIterator iterator = fstLongs.listIterator(0);
 
-        start = 0;
-        while (start < firstlevel.length && firstlevel[start] < y)
-            start += 3;
-        start -= 3;
-
-        long lb = start - 3 >= 0 ? firstlevel[start - 3] : lowerbound;
-        long max = firstlevel[start];
-        long size = firstlevel[start + 1];
-        long index = firstlevel[start + 2];
-
-        if (size == max - lb + 1) { // list contains all elements between lb and max, therefore also y
-            return true;
+        while (iterator.hasNext()) {
+            final long max = iterator.nextLong();
+            final long size = iterator.nextLong();
+            if (y <= max) {
+                return skipToInChunk(lowerbound, (int) max, size, iterator, y) == y;
+            }
+            final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+            switch (algorithm) {
+                case BITVECTOR:
+                case ELIASFANO:
+                    iterator.nextLong();
+                case NONE:
+                    break;
+            }
         }
-        LongWordBitReader bitReader = new LongWordBitReader(graph, pointerSize(outdegree + 1, firstlevel[firstlevel.length - 3]));
-
-        if (bitReader.extractInternal(1) != 0) { // list encoded with Elias Fano
-            EliasFanoSuccessorReader efReader = new EliasFanoSuccessorReader(size, (int) (max - lowerbound), graph, size, index, log2Quantum);
-            return y == efReader.skipTo(y);
-        }
-
-        // list encoded with bit map
-        bitReader.position(index);
-        int last = (int) lowerbound;
-        for (int i = 0; i < size; i++) {
-            last += bitReader.readUnary();
-            if (last == y) return true;
-            if (last > y) return false;
-        }
-
         return false;
+    }
+
+    private int skipToInChunk(long lowerbound, final int max, final long size, LongIterator iterator, final int target) {
+        final Partition.Algorithm algorithm = CostEvaluation.evaluateCost(max - lowerbound + 1, size).algorithm;
+        if (algorithm == Partition.Algorithm.NONE && target <= max && target >= lowerbound) return target;
+        final int index = (int) iterator.nextLong();
+        if (algorithm == Partition.Algorithm.BITVECTOR) {
+            LongWordBitReader graphBitReader = new LongWordBitReader(graph, pointerSize(size, max + 1));
+            graphBitReader.position(index);
+            lowerbound += graphBitReader.readUnary();
+            while (lowerbound < target)
+                lowerbound += graphBitReader.readUnary() + 1;
+            return (int) lowerbound;
+        }
+        EliasFanoSuccessorReader efReader = new EliasFanoSuccessorReader(size, max + 1, graph, size, index, log2Quantum);
+        return efReader.skipTo(target);
+
     }
 
     @Override
@@ -1571,7 +1581,7 @@ public class PEFGraph extends ImmutableGraph {
 
         final SimpleJSAP jsap = new SimpleJSAP(
                 BVGraph.class.getName(),
-                "Compresses a graph using the Elias-Fano representation. Source and destination are basenames from which suitable filenames will be stemmed; alternatively, if the suitable option was specified, source is a spec (see below). For more information about the compression techniques, see the Javadoc documentation.",
+                "Compresses a graph using the Partitioned Elias-Fano representation. Source and destination are basenames from which suitable filenames will be stemmed; alternatively, if the suitable option was specified, source is a spec (see below). For more information about the compression techniques, see the Javadoc documentation.",
                 new Parameter[]{
                         new FlaggedOption("graphClass", GraphClassParser.getParser(), null, JSAP.NOT_REQUIRED, 'g', "graph-class", "Forces a Java class for the source graph."),
                         new Switch("spec", 's', "spec", "The source is not a basename but rather a specification of the form <ImmutableGraphImplementation>(arg,arg,...)."),
