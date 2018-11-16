@@ -5,11 +5,12 @@ public class DoubleBoundWindow {
     long maxCost;
     private int start = 0;
     int end = 0;
+    private final short log2Quantum;
 
-
-    DoubleBoundWindow(int[] values, long maxCost) {
+    DoubleBoundWindow(int[] values, long maxCost, int log2Quantum) {
         this.values = values;
         this.maxCost = maxCost;
+        this.log2Quantum = (short) log2Quantum;
     }
 
     private long universe() {
@@ -33,7 +34,7 @@ public class DoubleBoundWindow {
     }
 
     private long getCost(long size, long universe) {
-        return CostEvaluation.evaluateCost(universe, size, true).cost;
+        return CostEvaluation.evaluateCost(universe, size, log2Quantum, true).cost;
     }
 
     private int getStart() {
@@ -47,7 +48,7 @@ public class DoubleBoundWindow {
     @Override
     public String toString() {
         return "Window{" +
-                "currCost=" + (this.size() > 0 ?this.getCost() : " n.a.") +
+                "currCost=" + (this.size() > 0 ? this.getCost() : " n.a.") +
                 ", maxCost=" + maxCost +
                 ", start=" + start +
                 ", end=" + end +

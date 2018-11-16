@@ -7,11 +7,13 @@ public class Window {
     int end = 0;
     private int minP;
     private int maxP = 0;
+    private final short log2Quantum;
 
 
-    Window(int[] values, long maxCost) {
+    Window(int[] values, long maxCost, int log2Quantum) {
         this.values = values;
         this.maxCost = maxCost;
+        this.log2Quantum = (short) log2Quantum;
         this.minP = this.getStart();
     }
 
@@ -38,7 +40,7 @@ public class Window {
     }
 
     private Cost getCost(long size, long universe) {
-        return CostEvaluation.evaluateCost(universe, size);
+        return CostEvaluation.evaluateCost(universe, size, log2Quantum);
     }
 
     private int getStart() {

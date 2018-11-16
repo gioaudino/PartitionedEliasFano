@@ -14,19 +14,21 @@ public class DoubleBoundApproximatedPartition {
     private int size;
     private IntArrayList partition;
     private long cost;
+    private final short log2Quantum;
 
-    public DoubleBoundApproximatedPartition(int[] nodes) {
+    public DoubleBoundApproximatedPartition(int[] nodes, int log2Quantum) {
         this.nodes = nodes;
         this.size = nodes.length;
+        this.log2Quantum = (short) log2Quantum;
     }
 
     public IntArrayList createDoubleBoundApproximatedPartition() {
-        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] - this.nodes[0] + 1, this.size, true).cost;
+        final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] - this.nodes[0] + 1, this.size, log2Quantum,true).cost;
         List<DoubleBoundWindow> windows = new ArrayList<>();
-        long minimumCost = CostEvaluation.evaluateCost(1, 1, true).cost;
+        long minimumCost = CostEvaluation.evaluateCost(1, 1,log2Quantum, true).cost;
         long costBound = minimumCost;
         while (costBound < minimumCost / EPS_1) {
-            windows.add(new DoubleBoundWindow(nodes, costBound));
+            windows.add(new DoubleBoundWindow(nodes, costBound, log2Quantum));
             if (costBound > singleBlockCost) break;
             costBound *= 1 + EPS_2;
         }

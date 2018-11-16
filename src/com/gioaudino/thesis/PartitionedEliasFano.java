@@ -9,6 +9,7 @@ import java.util.*;
 public class PartitionedEliasFano {
 
     private static final int DEFAULT_SAMPLES = 1000;
+    private static final int log2Quantum = 8;
 
     private final static DecimalFormat df3 = new DecimalFormat("0.###");
     private static int count = 0;
@@ -86,9 +87,9 @@ public class PartitionedEliasFano {
     static boolean run(int[] list, int node) {
         List<Integer> listShortestPath = getShortestPath(list);
 //        ApproximatedPartition opt = new ApproximatedPartition(list);
-        List<Partition> approximatedPartition = ApproximatedPartition.createApproximatedPartition(list);
+        List<Partition> approximatedPartition = ApproximatedPartition.createApproximatedPartition(list, log2Quantum);
 
-        DoubleBoundApproximatedPartition dbap = new DoubleBoundApproximatedPartition(list);
+        DoubleBoundApproximatedPartition dbap = new DoubleBoundApproximatedPartition(list, log2Quantum);
         List<Integer> doubleBound = dbap.createDoubleBoundApproximatedPartition();
 
 
@@ -125,7 +126,7 @@ public class PartitionedEliasFano {
 
     private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, List<Partition> ap, DoubleBoundApproximatedPartition dbap) {
         long pefCost = getCompressionCost(graphShortestPath, list);
-        long efCost = CostEvaluation.eliasFanoCompressionCost(list[list.length - 1] + 1, list.length);
+        long efCost = CostEvaluation.eliasFanoCompressionCost(list[list.length - 1] + 1, list.length, (short) log2Quantum);
 
         System.out.println("\nCost of compression: " + pefCost + " bits");
         System.out.println("EF cost: " + efCost + " bits");
@@ -159,7 +160,7 @@ public class PartitionedEliasFano {
     private static List<Integer> getShortestPath(int[] list) {
         StepInPath[] steps = new StepInPath[list.length + 1];
 
-        final long maxWeight = CostEvaluation.evaluateCost(list[list.length - 1] + 1, list.length).cost;
+        final long maxWeight = CostEvaluation.evaluateCost(list[list.length - 1] + 1, list.length, (short) log2Quantum).cost;
 
         for (int i = 0; i < steps.length; i++) {
             steps[i] = new StepInPath();
@@ -198,7 +199,7 @@ public class PartitionedEliasFano {
             universe -= from > 0 ? list[from - 1] + 1 : list[from];
         int elements = to - from;
 
-        return CostEvaluation.evaluateCost(universe, elements).cost;
+        return CostEvaluation.evaluateCost(universe, elements, (short) log2Quantum).cost;
     }
 
     static long getCompressionCost(List<Integer> partition, int[] list) {

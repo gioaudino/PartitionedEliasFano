@@ -9,17 +9,17 @@ public class ApproximatedPartition {
     final static double EPS_1 = 0.03;
     final static double EPS_2 = 0.3;
 
-    public static List<Partition> createApproximatedPartition(int[] nodes) {
+    public static List<Partition> createApproximatedPartition(int[] nodes, int log2Quantum) {
         final int size = nodes.length;
         if (size == 0)
             return new ArrayList<>();
-        final Cost singleBlock = CostEvaluation.evaluateCost(nodes[nodes.length - 1] - nodes[0] + 1, size);
+        final Cost singleBlock = CostEvaluation.evaluateCost(nodes[nodes.length - 1] - nodes[0] + 1, size, (short) log2Quantum);
         final long singleBlockCost = singleBlock.cost;
         List<Window> windows = new ArrayList<>();
-        long minimumCost = CostEvaluation.evaluateCost(1, 1).cost;
+        long minimumCost = CostEvaluation.evaluateCost(1, 1, (short) log2Quantum).cost;
         long costBound = minimumCost;
         while (costBound < minimumCost / EPS_1) {
-            windows.add(new Window(nodes, costBound));
+            windows.add(new Window(nodes, costBound, log2Quantum));
             if (costBound > singleBlockCost) break;
             costBound *= 1 + EPS_2;
         }
