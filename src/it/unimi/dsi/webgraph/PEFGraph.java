@@ -959,13 +959,14 @@ public class PEFGraph extends ImmutableGraph {
                 continue;
             }
             long lowerbound = successors[0];
-
+            long lastmax = successors[0];
             final int lowerboundBits = fstStream.writeGamma(int2nat(lowerbound - node));
             bitsForFirstLevel += lowerboundBits;
 
 
             for (Partition subset : partition) {
-                final int maxBits = fstStream.writeGamma(successors[subset.to - 1]);
+                final int maxBits = fstStream.writeGamma(successors[subset.to - 1] - lastmax);
+                lastmax = successors[subset.to - 1];
                 final int sizeBits = fstStream.writeNonZeroGamma(subset.to - subset.from);
                 bitsForFirstLevel += maxBits + sizeBits;
 
@@ -1526,12 +1527,13 @@ public class PEFGraph extends ImmutableGraph {
         reader.position(start);
         final long outdegree = reader.readGamma();
         long lowerbound = nat2int(reader.readGamma()) + x;
+        long lastmax = lowerbound;
         firstLevel.add(outdegree);
         firstLevel.add(lowerbound);
 
-        //TODO possible off-by-one
         while (reader.position() < end) {
-            final long max = reader.readGamma();
+            final long max = reader.readGamma() + lastmax;
+            lastmax = max;
             final long size = reader.readNonZeroGamma();
             firstLevel.add(max);
             firstLevel.add(size);
@@ -1539,7 +1541,7 @@ public class PEFGraph extends ImmutableGraph {
             if (CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm != Partition.Algorithm.NONE) {
                 firstLevel.add(reader.readGamma());
             }
-            lowerbound = max+1;
+            lowerbound = max + 1;
         }
         return firstLevel;
     }
