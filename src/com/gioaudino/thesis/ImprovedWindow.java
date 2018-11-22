@@ -22,7 +22,7 @@ public class DoubleBoundWindow {
     }
 
     void advanceStart() {
-        ++this.start;
+        this.start++;
     }
 
     void advanceEnd() {
@@ -35,14 +35,6 @@ public class DoubleBoundWindow {
 
     private long getCost(long size, long universe) {
         return CostEvaluation.evaluateCost(universe, size, log2Quantum, true).cost;
-    }
-
-    private int getStart() {
-        return this.values[this.start];
-    }
-
-    private int getEnd() {
-        return this.values[this.end];
     }
 
     @Override

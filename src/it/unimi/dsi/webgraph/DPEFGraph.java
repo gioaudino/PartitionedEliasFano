@@ -29,17 +29,22 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.text.DecimalFormat;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static it.unimi.dsi.bits.Fast.*;
 
 /**
  * An immutable graph based on the Elias&ndash;Fano representation of monotone sequences.
+ *
+ * @author Giorgio Audino
  */
 
-public class PEFGraph extends ImmutableGraph {
-    private static final Logger LOGGER = LoggerFactory.getLogger(PEFGraph.class);
+public class DPEFGraph extends ImmutableGraph {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DPEFGraph.class);
 
     /**
      * The standard extension for the graph longword bit stream.
@@ -93,7 +98,7 @@ public class PEFGraph extends ImmutableGraph {
     /**
      * First level data for the compressed Partitioned Elias-Fano graph
      */
-    protected final LongBigList firstlevels;
+    protected final long[] firstlevels;
     /**
      * The basename of this graph (or possibly <code>null</code>).
      */
@@ -120,7 +125,7 @@ public class PEFGraph extends ImmutableGraph {
      */
     protected long cachedPointer;
 
-    protected PEFGraph(final CharSequence basename, final int n, final long m, final int upperBound, final int log2Quantum, LongBigList graph, LongBigList offsets, LongBigList firstlevels) {
+    protected DPEFGraph(final CharSequence basename, final int n, final long m, final int upperBound, final int log2Quantum, LongBigList graph, LongBigList offsets, long[] firstlevels) {
         this.basename = basename;
         this.n = n;
         this.m = m;
@@ -128,9 +133,9 @@ public class PEFGraph extends ImmutableGraph {
         this.log2Quantum = log2Quantum;
         this.graph = graph;
         this.offsets = offsets;
+        outdegreeLongWordBitReader = new LongWordBitReader(graph, 0);
         cachedNode = Integer.MIN_VALUE;
         this.firstlevels = firstlevels;
-        outdegreeLongWordBitReader = new LongWordBitReader(this.firstlevels, 0);
     }
 
     @Override
@@ -216,7 +221,7 @@ public class PEFGraph extends ImmutableGraph {
 
         @SuppressWarnings("resource")
         public LongWordCache(final int cacheSize, final String suffix) throws IOException {
-            spillFile = File.createTempFile(PEFGraph.class.getName(), suffix);
+            spillFile = File.createTempFile(DPEFGraph.class.getName(), suffix);
             spillFile.deleteOnExit();
             spillChannel = new RandomAccessFile(spillFile, "rw").getChannel();
             cache = ByteBuffer.allocateDirect(cacheSize).order(ByteOrder.nativeOrder());
@@ -561,13 +566,13 @@ public class PEFGraph extends ImmutableGraph {
             currentLength = 0;
             lastOnePosition = -1;
 
-            l = PEFGraph.lowerBits(correctedLength, upperBound);
+            l = DPEFGraph.lowerBits(correctedLength, upperBound);
 
 
             lowerBitsMask = (1L << l) - 1;
 
-            pointerSize = PEFGraph.pointerSize(correctedLength, upperBound);
-            expectedNumberOfPointers = PEFGraph.numberOfPointers(correctedLength, upperBound, log2Quantum);
+            pointerSize = DPEFGraph.pointerSize(correctedLength, upperBound);
+            expectedNumberOfPointers = DPEFGraph.numberOfPointers(correctedLength, upperBound, log2Quantum);
             // System.err.println("l = " + l + " numberOfPointers = " + expectedNumberOfPointers +
             // " pointerSize = " + pointerSize);
         }
@@ -615,106 +620,106 @@ public class PEFGraph extends ImmutableGraph {
     }
 
     /**
-     * Creates a new {@link PEFGraph} by loading a compressed graph file from disk to memory, with no
+     * Creates a new {@link DPEFGraph} by loading a compressed graph file from disk to memory, with no
      * progress logger and all offsets.
      *
      * @param basename the basename of the graph.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while reading the graph.
      */
-    public static PEFGraph load(CharSequence basename) throws IOException {
+    public static DPEFGraph load(CharSequence basename) throws IOException {
         return loadInternal(basename, false, null);
     }
 
     /**
-     * Creates a new {@link PEFGraph} by loading a compressed graph file from disk to memory, with
+     * Creates a new {@link DPEFGraph} by loading a compressed graph file from disk to memory, with
      * all offsets.
      *
      * @param basename the basename of the graph.
      * @param pl       a progress logger used while loading the graph, or <code>null</code>.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while reading the graph.
      */
-    public static PEFGraph load(CharSequence basename, ProgressLogger pl) throws IOException {
+    public static DPEFGraph load(CharSequence basename, ProgressLogger pl) throws IOException {
         return loadInternal(basename, false, pl);
     }
 
     /**
-     * Creates a new {@link PEFGraph} by memory-mapping a graph file.
+     * Creates a new {@link DPEFGraph} by memory-mapping a graph file.
      *
      * @param basename the basename of the graph.
-     * @return an {@link PEFGraph} containing the specified graph.
+     * @return an {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while memory-mapping the graph or reading the
      *                     offsets.
      */
-    public static PEFGraph loadMapped(CharSequence basename) throws IOException {
+    public static DPEFGraph loadMapped(CharSequence basename) throws IOException {
         return loadInternal(basename, true, null);
     }
 
     /**
-     * Creates a new {@link PEFGraph} by memory-mapping a graph file.
+     * Creates a new {@link DPEFGraph} by memory-mapping a graph file.
      *
      * @param basename the basename of the graph.
      * @param pl       a progress logger used while loading the offsets, or <code>null</code>.
-     * @return an {@link PEFGraph} containing the specified graph.
+     * @return an {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while memory-mapping the graph or reading the
      *                     offsets.
      */
-    public static PEFGraph loadMapped(CharSequence basename, ProgressLogger pl) throws IOException {
+    public static DPEFGraph loadMapped(CharSequence basename, ProgressLogger pl) throws IOException {
         return loadInternal(basename, true, pl);
     }
 
     /**
-     * Creates a new {@link PEFGraph} by loading a compressed graph file from disk to memory, without
+     * Creates a new {@link DPEFGraph} by loading a compressed graph file from disk to memory, without
      * offsets.
      *
      * @param basename the basename of the graph.
      * @param pl       a progress logger used while loading the graph, or <code>null</code>.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while reading the graph.
      * @deprecated Use {@link #loadOffline(CharSequence, ProgressLogger)} or {@link #loadMapped(CharSequence, ProgressLogger)} instead.
      */
     @Deprecated
-    public static PEFGraph loadSequential(CharSequence basename, ProgressLogger pl) throws IOException {
-        return PEFGraph.load(basename, pl);
+    public static DPEFGraph loadSequential(CharSequence basename, ProgressLogger pl) throws IOException {
+        return DPEFGraph.load(basename, pl);
     }
 
 
     /**
-     * Creates a new {@link PEFGraph} by loading a compressed graph file from disk to memory, with no
+     * Creates a new {@link DPEFGraph} by loading a compressed graph file from disk to memory, with no
      * progress logger and without offsets.
      *
      * @param basename the basename of the graph.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @deprecated Use {@link #loadOffline(CharSequence)} or {@link #loadMapped(CharSequence)} instead.
      */
     @Deprecated
-    public static PEFGraph loadSequential(CharSequence basename) throws IOException {
-        return PEFGraph.load(basename);
+    public static DPEFGraph loadSequential(CharSequence basename) throws IOException {
+        return DPEFGraph.load(basename);
     }
 
     /**
-     * Creates a new {@link PEFGraph} by loading just the metadata of a compressed graph file.
+     * Creates a new {@link DPEFGraph} by loading just the metadata of a compressed graph file.
      *
      * @param basename the basename of the graph.
      * @param pl       a progress logger, or <code>null</code>.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while reading the metadata.
      */
-    public static PEFGraph loadOffline(CharSequence basename, ProgressLogger pl) throws IOException {
-        return PEFGraph.loadMapped(basename, pl);
+    public static DPEFGraph loadOffline(CharSequence basename, ProgressLogger pl) throws IOException {
+        return DPEFGraph.loadMapped(basename, pl);
     }
 
 
     /**
-     * Creates a new {@link PEFGraph} by loading just the metadata of a compressed graph file.
+     * Creates a new {@link DPEFGraph} by loading just the metadata of a compressed graph file.
      *
      * @param basename the basename of the graph.
-     * @return a {@link PEFGraph} containing the specified graph.
+     * @return a {@link DPEFGraph} containing the specified graph.
      * @throws IOException if an I/O exception occurs while reading the metadata.
      */
-    public static PEFGraph loadOffline(CharSequence basename) throws IOException {
-        return PEFGraph.loadMapped(basename, null);
+    public static DPEFGraph loadOffline(CharSequence basename) throws IOException {
+        return DPEFGraph.loadMapped(basename, null);
     }
 
     /**
@@ -790,7 +795,7 @@ public class PEFGraph extends ImmutableGraph {
      * @param pl       a progress logger used while loading the graph, or <code>null</code>.
      * @return this graph.
      */
-    protected static PEFGraph loadInternal(final CharSequence basename, final boolean mapped, final ProgressLogger pl) throws IOException {
+    protected static DPEFGraph loadInternal(final CharSequence basename, final boolean mapped, final ProgressLogger pl) throws IOException {
         // First of all, we read the property file to get the relevant data.
         final FileInputStream propertyFile = new FileInputStream(basename + PROPERTIES_EXTENSION);
         final Properties properties = new Properties();
@@ -798,9 +803,9 @@ public class PEFGraph extends ImmutableGraph {
         propertyFile.close();
 
         // Soft check--we accept big stuff, too.
-        if (!PEFGraph.class.getName().equals(properties.getProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY).replace("it.unimi.dsi.big.webgraph", "it.unimi.dsi.webgraph")))
+        if (!DPEFGraph.class.getName().equals(properties.getProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY).replace("it.unimi.dsi.big.webgraph", "it.unimi.dsi.webgraph")))
             throw new IOException(
-                    "This class (" + PEFGraph.class.getName() + ") cannot load a graph stored using class \"" + properties.getProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY) + "\"");
+                    "This class (" + DPEFGraph.class.getName() + ") cannot load a graph stored using class \"" + properties.getProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY) + "\"");
 
         if (properties.getProperty("version") == null) throw new IOException("Missing format version information");
         else if (Integer.parseInt(properties.getProperty("version")) > EFGRAPH_VERSION)
@@ -848,17 +853,6 @@ public class PEFGraph extends ImmutableGraph {
             pl.start("Loading offsets...");
         }
 
-        // Loading first level bitstream
-
-        final LongBigList firstLevels;
-        final FileInputStream fstIs = new FileInputStream(basename + FIRST_LEVEL_EXTENSION);
-        if (mapped) firstLevels = ByteBufferLongBigList.map(fstIs.getChannel(), byteOrder);
-        else {
-            firstLevels = loadLongBigList(basename + FIRST_LEVEL_EXTENSION, byteOrder);
-            fstIs.close();
-        }
-
-
         // We try to load a cached big list.
         final File offsetsBigListFile = new File(basename + OFFSETS_BIG_LIST_EXTENSION);
         LongBigList offsets = null;
@@ -875,7 +869,7 @@ public class PEFGraph extends ImmutableGraph {
 
         if (offsets == null) {
             final InputBitStream offsetIbs = new InputBitStream(basename + OFFSETS_EXTENSION);
-            offsets = new EliasFanoMonotoneLongBigList(n + 1, firstLevels.size64() * Long.SIZE + 1, new OffsetsLongIterator(offsetIbs, n));
+            offsets = new EliasFanoMonotoneLongBigList(n + 1, graph.size64() * Long.SIZE + 1, new OffsetsLongIterator(offsetIbs, n));
             offsetIbs.close();
         }
 
@@ -886,7 +880,10 @@ public class PEFGraph extends ImmutableGraph {
                 pl.logger().info("Pointer bits per node: " + Util.format(((EliasFanoMonotoneLongBigList) offsets).numBits() / (n + 1.0)));
         }
 
-        return new PEFGraph(basename, n, m, upperBound, log2Quantum, graph, offsets, firstLevels);
+        long[] firstlevels = BinIO.loadLongs(basename + FIRST_LEVEL_EXTENSION);
+
+
+        return new DPEFGraph(basename, n, m, upperBound, log2Quantum, graph, offsets, firstlevels);
     }
 
 
@@ -922,22 +919,7 @@ public class PEFGraph extends ImmutableGraph {
         long numberOfArcs = 0;
         long bitsForOutdegrees = 0;
         long bitsForSuccessors = 0;
-        long deltaBitsForFirstLevel;
         offsets.writeLongDelta(0);
-        final FileOutputStream fstOs = new FileOutputStream(basename + FIRST_LEVEL_EXTENSION);
-        final FileChannel fstChannel = fstOs.getChannel();
-        final LongWordOutputBitStream fstStream = new LongWordOutputBitStream(fstChannel, byteOrder);
-
-        PrintWriter maxWriter = new PrintWriter(new FileWriter(basename + "-max.txt"));
-
-        long bitsForLowerbound = 0;
-        long bitsForMax = 0;
-        long bitsForOffset = 0;
-        long bitsForSize = 0;
-        long noneChunks = 0;
-        long bitVectorChunks = 0;
-        long eliasFanoChunks = 0;
-
 
         if (pl != null) {
             pl.itemsName = "nodes";
@@ -947,59 +929,55 @@ public class PEFGraph extends ImmutableGraph {
             }
             pl.start("Storing...");
         }
+        /*
+         * First level will contain three 64 bit integers for each subset: upper bound for the subset, # of elements in the subset, index of the bit array.
+         * Each partition will start with two 64bit integers:
+         * - the out-degree of the node
+         * - the lower-bound, i.e. the first element of the posting list to compress if present, 0 otherwise.
+         *
+         * If a subset is compressed and written (i.e. if universe size != number of elements) starts with a single bit that is:
+         * - 1 if it's compressed using Elias-Fano
+         * - 0 if it's compressed with a bit vector.
+         */
 
+        LongArrayList firstLevels = new LongArrayList();
         for (NodeIterator nodeIterator = graph.nodeIterator(); nodeIterator.hasNext(); ) {
-            int node = nodeIterator.nextInt();
+            int nodeDelta = 0;
+            nodeIterator.nextInt();
             final long outdegree = nodeIterator.outdegree();
             numberOfArcs += outdegree;
+            bitsForOutdegrees += Long.SIZE;
             int[] successors = nodeIterator.successorArray();
             successors = Arrays.copyOf(successors, nodeIterator.outdegree());
             List<Partition> partition = ApproximatedPartition.createApproximatedPartition(successors, log2Quantum);
 
 
-            final int outDegreeBits = fstStream.writeGamma(outdegree);
-            bitsForOutdegrees += outDegreeBits;
-            deltaBitsForFirstLevel = outDegreeBits;
-
+            firstLevels.add(outdegree);
             if (outdegree == 0) {
-                offsets.writeLongDelta(deltaBitsForFirstLevel);
+                offsets.writeLongDelta(1);
                 if (pl != null) pl.lightUpdate();
                 continue;
             }
+            firstLevels.add(successors[0]);
+
+            nodeDelta += 2;
+
             long lowerbound = successors[0];
-            long lastmax = successors[0];
-            final int lowerboundBits = fstStream.writeGamma(int2nat(lowerbound - node));
-            deltaBitsForFirstLevel += lowerboundBits;
 
-            bitsForLowerbound += lowerboundBits;
+            for (Partition subset : partition) {
+                firstLevels.add(successors[subset.to - 1]);
+                firstLevels.add(subset.to - subset.from);
 
-            Iterator<Partition> iterator = partition.iterator();
-            while (iterator.hasNext()) {
-                Partition subset = iterator.next();
-                long maxtowrite = successors[subset.to - 1] - lastmax;
-                maxWriter.println(maxtowrite);
-                final int maxBits = fstStream.writeGamma(maxtowrite);
-                deltaBitsForFirstLevel += maxBits;
-                bitsForMax += maxBits;
-                lastmax = successors[subset.to - 1];
-
-                if (iterator.hasNext()) {
-                    final int sizeBits = fstStream.writeNonZeroGamma(subset.to - subset.from);
-                    deltaBitsForFirstLevel += sizeBits;
-                    bitsForSize += sizeBits;
-                }
                 if (subset.algorithm == Partition.Algorithm.NONE) {
+                    nodeDelta += 2;
                     lowerbound = successors[subset.to - 1] + 1;
-                    noneChunks++;
                     continue;
                 }
 
-                final int bitStreamOffsetBits = fstStream.writeGamma(bitsForSuccessors);
-                deltaBitsForFirstLevel += bitStreamOffsetBits;
-                bitsForOffset += bitStreamOffsetBits;
+                firstLevels.add(bitsForSuccessors);
+                nodeDelta += 3;
 
                 if (subset.algorithm == Partition.Algorithm.BITVECTOR) {
-                    bitVectorChunks++;
                     LongArrayBitVector bitVector = LongArrayBitVector.ofLength(successors[subset.to - 1] - lowerbound + 1);
 
                     for (int i = subset.from; i < subset.to; i++) {
@@ -1010,7 +988,6 @@ public class PEFGraph extends ImmutableGraph {
                 }
 
                 if (subset.algorithm == Partition.Algorithm.ELIASFANO) {
-                    eliasFanoChunks++;
                     successorsAccumulator.init(subset.to - subset.from, successors[subset.to - 1] + 1, false, true, log2Quantum);
                     for (int i = subset.from; i < subset.to; i++) {
                         successorsAccumulator.add(successors[i] - lowerbound);
@@ -1021,24 +998,21 @@ public class PEFGraph extends ImmutableGraph {
                 }
                 lowerbound = successors[subset.to - 1] + 1;
             }
-            offsets.writeLongDelta(deltaBitsForFirstLevel);
+
+            offsets.writeLongDelta(nodeDelta);
             if (pl != null) pl.lightUpdate();
         }
 
-        // "Lid" to prevent outOfBoundException when reading last chunk
-        graphStream.append(1L, 1);
+
+        long a[] = new long[firstLevels.size()];
+
+        BinIO.storeLongs(firstLevels.toArray(a), 0, firstLevels.size(), basename + FIRST_LEVEL_EXTENSION);
+
 
         successorsAccumulator.close();
         graphStream.close();
         graphOs.close();
         offsets.close();
-        fstStream.close();
-        fstOs.close();
-        maxWriter.close();
-
-        final long writtenBitsForFirstLevel = new File(basename + FIRST_LEVEL_EXTENSION).length() * 8;
-
-        assert writtenBitsForFirstLevel == 64 * (((bitsForLowerbound + bitsForOutdegrees + bitsForMax + bitsForOffset + bitsForSize) / 64) + 1);
 
         final long n = graph.numNodes();
 
@@ -1050,21 +1024,12 @@ public class PEFGraph extends ImmutableGraph {
 
         final DecimalFormat format = new DecimalFormat("0.###");
         final long writtenBits = new File(basename + GRAPH_EXTENSION).length() * 8;
-
-        final long chunks = eliasFanoChunks + bitVectorChunks + noneChunks;
+        final long bitsForFirstLevel = new File(basename + FIRST_LEVEL_EXTENSION).length() * 8;
 
         final Properties properties = new Properties();
         properties.setProperty("nodes", String.valueOf(n));
         properties.setProperty("arcs", String.valueOf(numberOfArcs));
         if (upperBound != n) properties.setProperty("upperbound", String.valueOf(upperBound));
-        properties.setProperty("bitsforlowerbound", Long.toString(bitsForLowerbound));
-        properties.setProperty("avgbitsforlowerbound", format.format((double) bitsForLowerbound / n));
-        properties.setProperty("bitsformax", Long.toString(bitsForMax));
-        properties.setProperty("avgbitsformax", format.format((double) bitsForMax / chunks));
-        properties.setProperty("bitsforoffset", Long.toString(bitsForOffset));
-        properties.setProperty("avgbitsforoffset", format.format((double) bitsForOffset / (eliasFanoChunks + bitVectorChunks)));
-        properties.setProperty("bitsforsize", Long.toString(bitsForSize));
-        properties.setProperty("avgbitsforsize", format.format((double) bitsForSize / (chunks)));
         properties.setProperty("quantum", String.valueOf(1L << log2Quantum));
         properties.setProperty("byteorder", byteOrder.toString());
         properties.setProperty("bitsperlink", format.format((double) writtenBits / numberOfArcs));
@@ -1072,10 +1037,10 @@ public class PEFGraph extends ImmutableGraph {
         properties.setProperty("bitspernode", format.format((double) writtenBits / n));
         properties.setProperty("avgbitsforoutdegrees", format.format((double) bitsForOutdegrees / n));
         properties.setProperty("bitsforoutdegrees", Long.toString(bitsForOutdegrees));
-        properties.setProperty("bitsforfirstlevel", Long.toString(writtenBitsForFirstLevel));
+        properties.setProperty("bitsforfirstlevel", Long.toString(bitsForFirstLevel));
         properties.setProperty("bitsforsuccessors", Long.toString(bitsForSuccessors));
-        properties.setProperty("totalbitsperlink", format.format((double) (writtenBitsForFirstLevel + writtenBits) / numberOfArcs));
-        properties.setProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY, PEFGraph.class.getName());
+        properties.setProperty("fullbitsperlink", format.format((double) (bitsForFirstLevel + writtenBits) / numberOfArcs));
+        properties.setProperty(ImmutableGraph.GRAPHCLASS_PROPERTY_KEY, DPEFGraph.class.getName());
         properties.setProperty("version", String.valueOf(EFGRAPH_VERSION));
         final FileOutputStream propertyFile = new FileOutputStream(basename + PROPERTIES_EXTENSION);
         properties.store(propertyFile, "PEFGraph properties");
@@ -1116,10 +1081,6 @@ public class PEFGraph extends ImmutableGraph {
          * The current position in the list.
          */
         private long curr;
-
-        public LongWordBitReader(final LongBigList list) {
-            this(list, 1);
-        }
 
         public LongWordBitReader(final LongBigList list, final int l) {
             assert l < Long.SIZE;
@@ -1270,7 +1231,8 @@ public class PEFGraph extends ImmutableGraph {
     @Override
     public int outdegree(int x) {
         if (x == cachedNode) return cachedOutdegree;
-        cachedOutdegree = (int) this.outdegreeLongWordBitReader.position(this.offsets.getLong(this.cachedNode = x)).readGamma();
+        cachedOutdegree = (int) this.firstlevels[(int) this.offsets.getLong(cachedNode = x)];
+//        cachedOutdegree = (int) outdegreeLongWordBitReader.position(offsets.getLong(cachedNode = x)).readGamma();
         cachedPointer = outdegreeLongWordBitReader.position();
         return cachedOutdegree;
     }
@@ -1476,28 +1438,27 @@ public class PEFGraph extends ImmutableGraph {
         private final int lowerbound;
         private final int log2Quantum;
         private final LongBigList graph;
-        private final LongArrayList firstLevel;
+        private final long[] firstlevel;
         private int[] successors;
 
-        public PartitionedEliasFanoIterator(LongBigList graph, LongArrayList firstLevel, int log2Quantum) {
+        public PartitionedEliasFanoIterator(LongBigList graph, long outdegree, long lowerbound, long[] firstlevel, int log2Quantum) {
             this.graph = graph;
-            this.firstLevel = firstLevel;
+            this.outdegree = (int) outdegree;
+            this.lowerbound = (int) lowerbound;
+            this.firstlevel = firstlevel;
             this.log2Quantum = log2Quantum;
-            this.outdegree = (int) firstLevel.getLong(0);
-            if (outdegree == 0) {
-                this.successors = new int[]{};
-                this.lowerbound = -1;
-            } else {
-                this.lowerbound = (int) firstLevel.getLong(1);
-                this.successors = new int[outdegree];
-                decompress();
-            }
+
+            successors = new int[this.outdegree];
+            if (outdegree > 0)
+                this.decompress();
         }
 
         private void decompress() {
+
             int lowerbound = this.lowerbound;
             int next = 0;
-            final LongListIterator iterator = this.firstLevel.listIterator(2);
+            final LongArrayList fstlevel = new LongArrayList(this.firstlevel);
+            final LongListIterator iterator = fstlevel.listIterator(0);
             while (iterator.hasNext()) {
                 final int max = (int) iterator.nextLong();
                 final int size = (int) iterator.nextLong();
@@ -1554,63 +1515,27 @@ public class PEFGraph extends ImmutableGraph {
 
     @Override
     public LazyIntSkippableIterator successors(final int x) {
-        return new PartitionedEliasFanoIterator(graph, decompressFirstLevel(x), log2Quantum);
-    }
-
-    private LongArrayList decompressFirstLevel(final int x) {
-        final LongArrayList firstLevel = new LongArrayList();
         final int start = (int) this.offsets.getLong(x);
-        final int end = (int) this.offsets.getLong(x + 1);
-
-        final LongWordBitReader reader = new LongWordBitReader(this.firstlevels);
-        reader.position(start);
-        final long outdegree = reader.readGamma();
-        long lowerbound = nat2int(reader.readGamma()) + x;
-        long lastmax = lowerbound;
-        long size;
-        firstLevel.add(outdegree);
-        firstLevel.add(lowerbound);
-
-        int evaluatedOutDegree = 0;
-
-        while (reader.position() < end) {
-            final long max = reader.readGamma() + lastmax;
-            firstLevel.add(max);
-            lastmax = max;
-
-            if (reader.position() == end) {
-                firstLevel.add(outdegree - evaluatedOutDegree);
-                continue;
-            }
-            long nextValue = reader.readNonZeroGamma();
-            if (reader.position() == end) {
-                firstLevel.add(outdegree - evaluatedOutDegree);
-                firstLevel.add(nextValue - 1);
-                continue;
-            }
-
-            size = nextValue;
-            evaluatedOutDegree += size;
-            firstLevel.add(size);
-
-            if (CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm != Partition.Algorithm.NONE) {
-                firstLevel.add(reader.readGamma());
-            }
-            lowerbound = max + 1;
+        final int outdegree = (int) firstlevels[start];
+        if (outdegree == 0) {
+            return new EliasFanoSuccessorReader(n, n, graph, 0, 0, log2Quantum);
         }
-        return firstLevel;
+        return new PartitionedEliasFanoIterator(graph, this.firstlevels[start], this.firstlevels[start + 1], Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length), log2Quantum);
     }
 
     public boolean adj(final int x, final int y) {
         if (x > n || y > n) return false;
-        LongArrayList firstLevel = decompressFirstLevel(x);
-        final long outdegree = firstLevel.getLong(0);
+        int start = (int) this.offsets.getLong(x);
+        final long outdegree = this.firstlevels[start];
         if (outdegree == 0) return false;
 
-        long lowerbound = firstLevel.getLong(1);
+        long lowerbound = this.firstlevels[start + 1];
         if (y < lowerbound) return false;
         if (y == lowerbound) return true;
-        LongIterator iterator = firstLevel.listIterator(2);
+        long[] firstlevel = Arrays.copyOfRange(this.firstlevels, start + 2, x + 1 < n ? (int) this.offsets.getLong(x + 1) : this.firstlevels.length);
+
+        LongArrayList fstLongs = new LongArrayList(firstlevel);
+        LongIterator iterator = fstLongs.listIterator(0);
 
         while (iterator.hasNext()) {
             final long max = iterator.nextLong();
@@ -1648,8 +1573,8 @@ public class PEFGraph extends ImmutableGraph {
     }
 
     @Override
-    public PEFGraph copy() {
-        return new PEFGraph(basename, n, m, upperBound, log2Quantum, graph instanceof ByteBufferLongBigList ? ((ByteBufferLongBigList) graph).copy() : graph, offsets, firstlevels);
+    public DPEFGraph copy() {
+        return new DPEFGraph(basename, n, m, upperBound, log2Quantum, graph instanceof ByteBufferLongBigList ? ((ByteBufferLongBigList) graph).copy() : graph, offsets, firstlevels);
     }
 
     public static void main(String args[]) throws SecurityException, IllegalAccessException, InvocationTargetException, NoSuchMethodException, IOException, JSAPException, ClassNotFoundException,
@@ -1710,9 +1635,9 @@ public class PEFGraph extends ImmutableGraph {
         if (dest != null) {
             if (list || fixedWidthList)
                 throw new IllegalArgumentException("You cannot specify a destination graph with these options");
-            PEFGraph.store(graph, dest, log2Quantum, DEFAULT_CACHE_SIZE, ByteOrder.nativeOrder(), pl);
+            DPEFGraph.store(graph, dest, log2Quantum, DEFAULT_CACHE_SIZE, ByteOrder.nativeOrder(), pl);
         } else {
-            if (!(graph instanceof PEFGraph)) throw new IllegalArgumentException("The source graph is not an PEFGraph");
+            if (!(graph instanceof DPEFGraph)) throw new IllegalArgumentException("The source graph is not an PEFGraph");
             final InputBitStream offsets = new InputBitStream(graph.basename() + OFFSETS_EXTENSION);
             final long sizeInBits = new File(graph.basename() + GRAPH_EXTENSION).length() * Byte.SIZE + 1;
             final OffsetsLongIterator offsetsIterator = new OffsetsLongIterator(offsets, graph.numNodes());
