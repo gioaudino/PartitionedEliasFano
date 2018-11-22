@@ -947,7 +947,7 @@ public class PEFGraph extends ImmutableGraph {
             }
             pl.start("Storing...");
         }
-
+        final long n = graph.numNodes();
         for (NodeIterator nodeIterator = graph.nodeIterator(); nodeIterator.hasNext(); ) {
             int node = nodeIterator.nextInt();
             final long outdegree = nodeIterator.outdegree();
@@ -967,21 +967,22 @@ public class PEFGraph extends ImmutableGraph {
                 continue;
             }
             long lowerbound = successors[0];
-            long lastmax = successors[0];
             final int lowerboundBits = fstStream.writeGamma(int2nat(lowerbound - node));
             deltaBitsForFirstLevel += lowerboundBits;
 
             bitsForLowerbound += lowerboundBits;
 
             Iterator<Partition> iterator = partition.iterator();
+            int sizeSoFar = 0;
+
             while (iterator.hasNext()) {
                 Partition subset = iterator.next();
-                long maxtowrite = successors[subset.to - 1] - lastmax;
+                sizeSoFar += subset.to - subset.from;
+                long maxtowrite = getMaxToWrite(successors[subset.to - 1], sizeSoFar, outdegree, n);
                 maxWriter.println(maxtowrite);
                 final int maxBits = fstStream.writeGamma(maxtowrite);
                 deltaBitsForFirstLevel += maxBits;
                 bitsForMax += maxBits;
-                lastmax = successors[subset.to - 1];
 
                 if (iterator.hasNext()) {
                     final int sizeBits = fstStream.writeNonZeroGamma(subset.to - subset.from);
@@ -1040,7 +1041,6 @@ public class PEFGraph extends ImmutableGraph {
 
         assert writtenBitsForFirstLevel == 64 * (((bitsForLowerbound + bitsForOutdegrees + bitsForMax + bitsForOffset + bitsForSize) / 64) + 1);
 
-        final long n = graph.numNodes();
 
         if (pl != null) {
             pl.done();
@@ -1064,7 +1064,7 @@ public class PEFGraph extends ImmutableGraph {
         properties.setProperty("bitsforoffset", Long.toString(bitsForOffset));
         properties.setProperty("avgbitsforoffset", format.format((double) bitsForOffset / (eliasFanoChunks + bitVectorChunks)));
         properties.setProperty("bitsforsize", Long.toString(bitsForSize));
-        properties.setProperty("avgbitsforsize", format.format((double) bitsForSize / (chunks)));
+        properties.setProperty("avgbitsforsize", format.format((double) bitsForSize / (chunks - n)));
         properties.setProperty("quantum", String.valueOf(1L << log2Quantum));
         properties.setProperty("byteorder", byteOrder.toString());
         properties.setProperty("bitsperlink", format.format((double) writtenBits / numberOfArcs));
@@ -1080,6 +1080,10 @@ public class PEFGraph extends ImmutableGraph {
         final FileOutputStream propertyFile = new FileOutputStream(basename + PROPERTIES_EXTENSION);
         properties.store(propertyFile, "PEFGraph properties");
         propertyFile.close();
+    }
+
+    private static long getMaxToWrite(int max, int sizeSoFar, long outdegree, long nodes) {
+        return int2nat(max - (sizeSoFar * (nodes / outdegree)));
     }
 
 
@@ -1566,7 +1570,6 @@ public class PEFGraph extends ImmutableGraph {
         reader.position(start);
         final long outdegree = reader.readGamma();
         long lowerbound = nat2int(reader.readGamma()) + x;
-        long lastmax = lowerbound;
         long size;
         firstLevel.add(outdegree);
         firstLevel.add(lowerbound);
@@ -1574,23 +1577,31 @@ public class PEFGraph extends ImmutableGraph {
         int evaluatedOutDegree = 0;
 
         while (reader.position() < end) {
-            final long max = reader.readGamma() + lastmax;
-            firstLevel.add(max);
-            lastmax = max;
+            final long readMax = nat2int(reader.readGamma());
 
             if (reader.position() == end) {
-                firstLevel.add(outdegree - evaluatedOutDegree);
+                size = outdegree - evaluatedOutDegree;
+                evaluatedOutDegree += size;
+                final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+                firstLevel.add(max);
+                firstLevel.add(size);
                 continue;
             }
             long nextValue = reader.readNonZeroGamma();
             if (reader.position() == end) {
-                firstLevel.add(outdegree - evaluatedOutDegree);
+                size = outdegree - evaluatedOutDegree;
+                evaluatedOutDegree += size;
+                final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+                firstLevel.add(max);
+                firstLevel.add(size);
                 firstLevel.add(nextValue - 1);
                 continue;
             }
 
             size = nextValue;
             evaluatedOutDegree += size;
+            final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+            firstLevel.add(max);
             firstLevel.add(size);
 
             if (CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm != Partition.Algorithm.NONE) {
