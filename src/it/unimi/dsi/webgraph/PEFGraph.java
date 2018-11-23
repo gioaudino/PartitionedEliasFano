@@ -967,25 +967,27 @@ public class PEFGraph extends ImmutableGraph {
                 continue;
             }
             long lowerbound = successors[0];
+            long lastmax = lowerbound;
+            int size;
             final int lowerboundBits = fstStream.writeGamma(int2nat(lowerbound - node));
             deltaBitsForFirstLevel += lowerboundBits;
 
             bitsForLowerbound += lowerboundBits;
 
             Iterator<Partition> iterator = partition.iterator();
-            int sizeSoFar = 0;
 
             while (iterator.hasNext()) {
                 Partition subset = iterator.next();
-                sizeSoFar += subset.to - subset.from;
-                long maxtowrite = getMaxToWrite(successors[subset.to - 1], sizeSoFar, outdegree, n);
+                size = subset.to - subset.from;
+                long maxtowrite = successors[subset.to - 1] - lastmax - (size) + 1;
+                lastmax = successors[subset.to - 1];
                 maxWriter.println(maxtowrite);
                 final int maxBits = fstStream.writeGamma(maxtowrite);
                 deltaBitsForFirstLevel += maxBits;
                 bitsForMax += maxBits;
 
                 if (iterator.hasNext()) {
-                    final int sizeBits = fstStream.writeNonZeroGamma(subset.to - subset.from);
+                    final int sizeBits = fstStream.writeNonZeroGamma(size);
                     deltaBitsForFirstLevel += sizeBits;
                     bitsForSize += sizeBits;
                 }
@@ -1081,11 +1083,6 @@ public class PEFGraph extends ImmutableGraph {
         properties.store(propertyFile, "PEFGraph properties");
         propertyFile.close();
     }
-
-    private static long getMaxToWrite(int max, int sizeSoFar, long outdegree, long nodes) {
-        return int2nat(max - (sizeSoFar * (nodes / outdegree)));
-    }
-
 
     protected final static class LongWordBitReader {
 
@@ -1570,38 +1567,41 @@ public class PEFGraph extends ImmutableGraph {
         reader.position(start);
         final long outdegree = reader.readGamma();
         long lowerbound = nat2int(reader.readGamma()) + x;
-        long size;
+        long size = 0;
+        long lastMax = lowerbound;
         firstLevel.add(outdegree);
         firstLevel.add(lowerbound);
 
         int evaluatedOutDegree = 0;
-
         while (reader.position() < end) {
-            final long readMax = nat2int(reader.readGamma());
+            final long readMax = reader.readGamma() + lastMax - 1;
 
             if (reader.position() == end) {
                 size = outdegree - evaluatedOutDegree;
-                evaluatedOutDegree += size;
-                final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+                final long max = readMax + size;
+                lastMax = max;
                 firstLevel.add(max);
+                evaluatedOutDegree += size;
                 firstLevel.add(size);
                 continue;
             }
             long nextValue = reader.readNonZeroGamma();
             if (reader.position() == end) {
                 size = outdegree - evaluatedOutDegree;
-                evaluatedOutDegree += size;
-                final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+                final long max = readMax + size;
+                lastMax = max;
                 firstLevel.add(max);
+                evaluatedOutDegree += size;
                 firstLevel.add(size);
                 firstLevel.add(nextValue - 1);
                 continue;
             }
 
             size = nextValue;
-            evaluatedOutDegree += size;
-            final long max = readMax + evaluatedOutDegree * (this.n / outdegree);
+            final long max = readMax + size;
+            lastMax = max;
             firstLevel.add(max);
+            evaluatedOutDegree += size;
             firstLevel.add(size);
 
             if (CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm != Partition.Algorithm.NONE) {
