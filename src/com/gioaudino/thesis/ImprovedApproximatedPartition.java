@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DoubleBoundApproximatedPartition {
+public class ImprovedApproximatedPartition {
 
     final static double EPS_1 = 0.03;
     final static double EPS_2 = 0.3;
@@ -16,19 +16,19 @@ public class DoubleBoundApproximatedPartition {
     private long cost;
     private final short log2Quantum;
 
-    public DoubleBoundApproximatedPartition(int[] nodes, int log2Quantum) {
+    public ImprovedApproximatedPartition(int[] nodes, int log2Quantum) {
         this.nodes = nodes;
         this.size = nodes.length;
         this.log2Quantum = (short) log2Quantum;
     }
 
-    public IntArrayList createDoubleBoundApproximatedPartition() {
+    public IntArrayList createImprovedApproximatedPartition() {
         final long singleBlockCost = CostEvaluation.evaluateCost(this.nodes[this.nodes.length - 1] - this.nodes[0] + 1, this.size, log2Quantum,true).cost;
-        List<DoubleBoundWindow> windows = new ArrayList<>();
+        List<ImprovedWindow> windows = new ArrayList<>();
         long minimumCost = CostEvaluation.evaluateCost(1, 1,log2Quantum, true).cost;
         long costBound = minimumCost;
         while (costBound < minimumCost / EPS_1) {
-            windows.add(new DoubleBoundWindow(nodes, costBound, log2Quantum));
+            windows.add(new ImprovedWindow(nodes, costBound, log2Quantum));
             if (costBound > singleBlockCost) break;
             costBound *= 1 + EPS_2;
         }
@@ -44,7 +44,7 @@ public class DoubleBoundApproximatedPartition {
 
         for (int i = 0; i < this.size; i++) {
             int lastEnd = i + 1;
-            for (DoubleBoundWindow window : windows) {
+            for (ImprovedWindow window : windows) {
                 while (window.end < lastEnd)
                     window.advanceEnd();
 

@@ -89,8 +89,8 @@ public class PartitionedEliasFano {
 //        ApproximatedPartition opt = new ApproximatedPartition(list);
         List<Partition> approximatedPartition = ApproximatedPartition.createApproximatedPartition(list, log2Quantum);
 
-        DoubleBoundApproximatedPartition dbap = new DoubleBoundApproximatedPartition(list, log2Quantum);
-        List<Integer> doubleBound = dbap.createDoubleBoundApproximatedPartition();
+        ImprovedApproximatedPartition dbap = new ImprovedApproximatedPartition(list, log2Quantum);
+        List<Integer> doubleBound = dbap.createImprovedApproximatedPartition();
 
 
         Iterator<Integer> iter = listShortestPath.iterator();
@@ -124,7 +124,7 @@ public class PartitionedEliasFano {
         return brokeLimit;
     }
 
-    private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, List<Partition> ap, DoubleBoundApproximatedPartition dbap) {
+    private static boolean printStats(int node, int[] list, List<Integer> graphShortestPath, List<Partition> ap, ImprovedApproximatedPartition dbap) {
         long pefCost = getCompressionCost(graphShortestPath, list);
         long efCost = CostEvaluation.eliasFanoCompressionCost(list[list.length - 1] + 1, list.length, (short) log2Quantum);
 

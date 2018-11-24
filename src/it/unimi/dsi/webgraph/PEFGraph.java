@@ -67,8 +67,14 @@ public class PEFGraph extends ImmutableGraph {
      * The default base-two logarithm of the quantum.
      */
     public static final int DEFAULT_LOG_2_QUANTUM = 8;
+    /**
+     * The standard extension for the graph longowrd first-level bit stream
+     */
     private static final String FIRST_LEVEL_EXTENSION = ".fst";
-
+    /**
+     * If set, the compression method will write some data in .txt files to analyse data distribution
+     */
+    private static final boolean WRITE_DATA_DISTRIBUTION = false;
     /**
      * The number of nodes of the graph.
      */
@@ -928,7 +934,12 @@ public class PEFGraph extends ImmutableGraph {
         final FileChannel fstChannel = fstOs.getChannel();
         final LongWordOutputBitStream fstStream = new LongWordOutputBitStream(fstChannel, byteOrder);
 
-        PrintWriter maxWriter = new PrintWriter(new FileWriter(basename + "-max.txt"));
+        PrintWriter maxWriter;
+        PrintWriter offsetWriter;
+        if (WRITE_DATA_DISTRIBUTION) {
+            maxWriter = new PrintWriter(new FileWriter(basename + "-max.txt"));
+            offsetWriter = new PrintWriter(new FileWriter(basename + "-offset.txt"));
+        }
 
         long bitsForLowerbound = 0;
         long bitsForMax = 0;
@@ -937,7 +948,7 @@ public class PEFGraph extends ImmutableGraph {
         long noneChunks = 0;
         long bitVectorChunks = 0;
         long eliasFanoChunks = 0;
-
+        long chunksWithOffset = 0;
 
         if (pl != null) {
             pl.itemsName = "nodes";
@@ -969,6 +980,8 @@ public class PEFGraph extends ImmutableGraph {
             long lowerbound = successors[0];
             long lastmax = lowerbound;
             int size;
+            long offset = 0;
+
             final int lowerboundBits = fstStream.writeGamma(int2nat(lowerbound - node));
             deltaBitsForFirstLevel += lowerboundBits;
 
@@ -976,12 +989,14 @@ public class PEFGraph extends ImmutableGraph {
 
             Iterator<Partition> iterator = partition.iterator();
 
+            boolean shouldWriteOffset = true;
+
             while (iterator.hasNext()) {
                 Partition subset = iterator.next();
                 size = subset.to - subset.from;
                 long maxtowrite = successors[subset.to - 1] - lastmax - (size) + 1;
                 lastmax = successors[subset.to - 1];
-                maxWriter.println(maxtowrite);
+                if (WRITE_DATA_DISTRIBUTION) maxWriter.println(maxtowrite);
                 final int maxBits = fstStream.writeGamma(maxtowrite);
                 deltaBitsForFirstLevel += maxBits;
                 bitsForMax += maxBits;
@@ -997,9 +1012,16 @@ public class PEFGraph extends ImmutableGraph {
                     continue;
                 }
 
-                final int bitStreamOffsetBits = fstStream.writeGamma(bitsForSuccessors);
-                deltaBitsForFirstLevel += bitStreamOffsetBits;
-                bitsForOffset += bitStreamOffsetBits;
+                if (shouldWriteOffset) {
+                    final long offsetToWrite = bitsForSuccessors - offset;
+                    final int bitStreamOffsetBits = fstStream.writeGamma(offsetToWrite);
+                    if (WRITE_DATA_DISTRIBUTION) offsetWriter.println(offsetToWrite);
+                    offset = bitsForSuccessors;
+                    deltaBitsForFirstLevel += bitStreamOffsetBits;
+                    bitsForOffset += bitStreamOffsetBits;
+                    shouldWriteOffset = false;
+                    chunksWithOffset++;
+                }
 
                 if (subset.algorithm == Partition.Algorithm.BITVECTOR) {
                     bitVectorChunks++;
@@ -1010,6 +1032,7 @@ public class PEFGraph extends ImmutableGraph {
                     }
                     graphStream.append(bitVector);
                     bitsForSuccessors += bitVector.length();
+                    offset += bitVector.length();
                 }
 
                 if (subset.algorithm == Partition.Algorithm.ELIASFANO) {
@@ -1021,6 +1044,8 @@ public class PEFGraph extends ImmutableGraph {
                     }
                     final long bitsForSubList = successorsAccumulator.dump(graphStream);
                     bitsForSuccessors += bitsForSubList;
+
+                    shouldWriteOffset = true;
                 }
                 lowerbound = successors[subset.to - 1] + 1;
             }
@@ -1037,10 +1062,15 @@ public class PEFGraph extends ImmutableGraph {
         offsets.close();
         fstStream.close();
         fstOs.close();
-        maxWriter.close();
+
+        if (WRITE_DATA_DISTRIBUTION) {
+            maxWriter.close();
+            offsetWriter.close();
+        }
 
         final long writtenBitsForFirstLevel = new File(basename + FIRST_LEVEL_EXTENSION).length() * 8;
 
+        // Assertion checks the size of the written first-level bit stream, up to the closest 64-bit boundary
         assert writtenBitsForFirstLevel == 64 * (((bitsForLowerbound + bitsForOutdegrees + bitsForMax + bitsForOffset + bitsForSize) / 64) + 1);
 
 
@@ -1064,8 +1094,13 @@ public class PEFGraph extends ImmutableGraph {
         properties.setProperty("bitsformax", Long.toString(bitsForMax));
         properties.setProperty("avgbitsformax", format.format((double) bitsForMax / chunks));
         properties.setProperty("bitsforoffset", Long.toString(bitsForOffset));
-        properties.setProperty("avgbitsforoffset", format.format((double) bitsForOffset / (eliasFanoChunks + bitVectorChunks)));
+        properties.setProperty("avgbitsforoffset", format.format((double) bitsForOffset / (chunksWithOffset)));
         properties.setProperty("bitsforsize", Long.toString(bitsForSize));
+        properties.setProperty("chuksWithOffset", Long.toString(chunksWithOffset));
+        properties.setProperty("chunks", Long.toString(chunks));
+        properties.setProperty("nonechunks", Long.toString(noneChunks));
+        properties.setProperty("bitvectorchunks", Long.toString(bitVectorChunks));
+        properties.setProperty("eliasfanochunks", Long.toString(eliasFanoChunks));
         properties.setProperty("avgbitsforsize", format.format((double) bitsForSize / (chunks - n)));
         properties.setProperty("quantum", String.valueOf(1L << log2Quantum));
         properties.setProperty("byteorder", byteOrder.toString());
@@ -1567,22 +1602,26 @@ public class PEFGraph extends ImmutableGraph {
         reader.position(start);
         final long outdegree = reader.readGamma();
         long lowerbound = nat2int(reader.readGamma()) + x;
-        long size = 0;
+        long size;
         long lastMax = lowerbound;
         firstLevel.add(outdegree);
         firstLevel.add(lowerbound);
 
         int evaluatedOutDegree = 0;
+        boolean shouldReadOffset = true;
+        long offset = 0;
         while (reader.position() < end) {
             final long readMax = reader.readGamma() + lastMax - 1;
 
             if (reader.position() == end) {
                 size = outdegree - evaluatedOutDegree;
                 final long max = readMax + size;
-                lastMax = max;
                 firstLevel.add(max);
                 evaluatedOutDegree += size;
                 firstLevel.add(size);
+                if (max - lowerbound + 1 != size) {
+                    firstLevel.add(offset);
+                }
                 continue;
             }
             long nextValue = reader.readNonZeroGamma();
@@ -1593,7 +1632,7 @@ public class PEFGraph extends ImmutableGraph {
                 firstLevel.add(max);
                 evaluatedOutDegree += size;
                 firstLevel.add(size);
-                firstLevel.add(nextValue - 1);
+                firstLevel.add(offset + nextValue - 1);
                 continue;
             }
 
@@ -1603,9 +1642,15 @@ public class PEFGraph extends ImmutableGraph {
             firstLevel.add(max);
             evaluatedOutDegree += size;
             firstLevel.add(size);
+            Partition.Algorithm algo = CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm;
 
-            if (CostEvaluation.evaluateCost(max - lowerbound + 1, size, (short) log2Quantum).algorithm != Partition.Algorithm.NONE) {
-                firstLevel.add(reader.readGamma());
+            if (algo != Partition.Algorithm.NONE) {
+                if (shouldReadOffset) {
+                    offset += reader.readGamma();
+                }
+                firstLevel.add(offset);
+                shouldReadOffset = algo == Partition.Algorithm.ELIASFANO;
+                if (!shouldReadOffset) offset += max - lowerbound + 1;
             }
             lowerbound = max + 1;
         }

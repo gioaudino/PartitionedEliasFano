@@ -1,13 +1,13 @@
 package com.gioaudino.thesis;
 
-public class DoubleBoundWindow {
+public class ImprovedWindow {
     private int[] values;
     long maxCost;
     private int start = 0;
     int end = 0;
     private final short log2Quantum;
 
-    DoubleBoundWindow(int[] values, long maxCost, int log2Quantum) {
+    ImprovedWindow(int[] values, long maxCost, int log2Quantum) {
         this.values = values;
         this.maxCost = maxCost;
         this.log2Quantum = (short) log2Quantum;
