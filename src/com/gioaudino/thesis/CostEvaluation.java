@@ -3,33 +3,28 @@ package com.gioaudino.thesis;
 public class CostEvaluation {
 
     private final static long FIXED_COST = 64 + 64 + 64;
-    private final static long DOUBLE_BOUND_FIXED_COST = FIXED_COST + 64;
 
     public static Cost evaluateCost(long universe, long size, short log2Quantum) {
-        return evaluateCost(universe, size, log2Quantum, false);
-    }
-
-    public static Cost evaluateCost(long universe, long size, short log2Quantum, boolean hasDoubleBound) {
         Cost cost = new Cost();
         if (universe == size) {
-            cost.cost = hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST;
+            cost.cost = FIXED_COST;
             cost.algorithm = Partition.Algorithm.NONE;
             return cost;
         }
         long efCost = eliasFanoCompressionCost(universe, size, log2Quantum);
-        long bitVectorCost = bitVectorCompressionCost(universe, size);
+        long bitVectorCost = universe;
         if (efCost < bitVectorCost) {
-            cost.cost = efCost + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
+            cost.cost = efCost + FIXED_COST;
             cost.algorithm = Partition.Algorithm.ELIASFANO;
             return cost;
         }
-        cost.cost = bitVectorCost + (hasDoubleBound ? DOUBLE_BOUND_FIXED_COST : FIXED_COST);
+        cost.cost = bitVectorCost + FIXED_COST;
         cost.algorithm = Partition.Algorithm.BITVECTOR;
         return cost;
 
     }
 
-    static long eliasFanoCompressionCost(long universe, long size, short log2Quantum) {
+    private static long eliasFanoCompressionCost(long universe, long size, short log2Quantum) {
         long msb = 63 - Long.numberOfLeadingZeros(universe / size);
         long lowerBits = universe > size ? msb : 0;
         long higherBitsLength = size + (universe >> lowerBits) + 2;
@@ -40,19 +35,6 @@ public class CostEvaluation {
         long lowerBitsOffset = higherBitsOffsets + higherBitsLength;
 
         return lowerBitsOffset + size * lowerBits;
-    }
-
-    static long bitVectorCompressionCost(long universe, long size) {
-//        short logRank1Sampling = 9;
-//        long rank1Samples = universe >> logRank1Sampling;
-//        long rank1SampleSize = (long) Math.ceil(log2(size + 1));
-//        long pointer_size = (long) Math.ceil(log2(universe));
-//        long pointers1 = size >> logRank1Sampling;
-//        long pointers1Offset = rank1Samples * rank1SampleSize;
-//        long bitsOffset = pointers1Offset + pointers1 * pointer_size;
-//
-//        return bitsOffset + universe;
-        return universe;
     }
 
     private static double log2(double arg) {
