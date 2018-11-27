@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import static it.unimi.dsi.bits.Fast.*;
 
 /**
- * An immutable graph based on the Elias&ndash;Fano representation of monotone sequences.
+ * An immutable graph based on the Partitioned Elias&ndash;Fano representation of monotone sequences.
  */
 
 public class PEFGraph extends ImmutableGraph {
@@ -1016,7 +1016,7 @@ public class PEFGraph extends ImmutableGraph {
                     final long offsetToWrite = offset == -1 ? bitsForSuccessors : offset;
                     final int bitStreamOffsetBits = fstStream.writeGamma(offsetToWrite);
                     if (WRITE_DATA_DISTRIBUTION) offsetWriter.println(offsetToWrite);
-                    offset=0;
+                    offset = 0;
                     deltaBitsForFirstLevel += bitStreamOffsetBits;
                     bitsForOffset += bitStreamOffsetBits;
                     shouldWriteOffset = false;
@@ -1044,7 +1044,7 @@ public class PEFGraph extends ImmutableGraph {
                     }
                     final long bitsForSubList = successorsAccumulator.dump(graphStream);
                     bitsForSuccessors += bitsForSubList;
-                    offset+=bitsForSubList;
+                    offset += bitsForSubList;
                     shouldWriteOffset = true;
                 }
                 lowerbound = successors[subset.to - 1] + 1;
@@ -1055,7 +1055,6 @@ public class PEFGraph extends ImmutableGraph {
 
         // "Lid" to prevent outOfBoundException when reading last chunk
         graphStream.append(1L, 1);
-//        fstStream.append(1L, 1);
 
         successorsAccumulator.close();
         graphStream.close();
@@ -1596,14 +1595,14 @@ public class PEFGraph extends ImmutableGraph {
 
     private LongArrayList decompressFirstLevel(final int x) {
         final LongArrayList firstLevel = new LongArrayList();
-        final int start = (int) this.offsets.getLong(x);
-        final int end = (int) this.offsets.getLong(x + 1);
+        final long start = this.offsets.getLong(x);
+        final long end = this.offsets.getLong(x + 1);
 
         final LongWordBitReader reader = new LongWordBitReader(this.firstlevels);
         reader.position(start);
         final long outdegree = reader.readGamma();
         firstLevel.add(outdegree);
-        if(outdegree == 0) return firstLevel;
+        if (outdegree == 0) return firstLevel;
 
         long lowerbound = nat2int(reader.readGamma()) + x;
         long size;
@@ -1686,6 +1685,7 @@ public class PEFGraph extends ImmutableGraph {
                 case NONE:
                     break;
             }
+            lowerbound=max+1;
         }
         return false;
     }
