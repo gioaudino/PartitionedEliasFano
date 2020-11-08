@@ -66,18 +66,22 @@ The firstLevel is the vector that can be compressed further. The algorithm chose
 * Out-degree: this is just written in &gamma;. There isn't a correlation between a node's out-degree and any other value.
 * Lowerbound: given the locality principle, the node `i` often has neighbours close to `i`. Hence, we can store `i`'s lowerbound as the gap from `i`. Since this could also be negative, the method `int2nat` is used, so that negative numbers can be mapped to positive values. This changed the distribution of lowerbound values, as the following pictures show.
 
-<!--![lb-abs](lowerbound-abs.png)
-![lb-rel](lowerbound-rel.png)-->
+Absolute lowerbound distribution |  Relative lowerbound distribution
+:-------------------------:|:-------------------------:
+![lb-abs](lowerbound-abs.png)  |  ![lb-rel](lowerbound-rel.png)
 
 * Max: given that each posting list is a strictly increasing monotonic sequence, the maximum values of each subsequence will also be strictly increasing. Furthermore, the difference between two consecutive max values is at least the size of the second chunk: if chucnk *i* has max *a* and chunk *i+1*, long *n*, has *b* as its max, then *b - a ≥ n*. Exploiting this, each max is saved as the difference with the previous chunk's max minus the size of the chunk: in this example, the value for the max of the chunk *i+1* would be *b-a-n*. For the first chunk, the lowerbound acts as the max of the previous sequence. The change was impactful, as these picture show.
 
-<!--![max-abs](max-abs.png)
-![max-rel](max-rel.png)-->
+
+Absolute max distribution |  Relative max distribution
+:-------------------------:|:-------------------------:
+![max-abs](max-abs.png)  |  ![max-rel](max-rel.png)
+
 
 * Size: since no chunk can have 0 values, the code used to write these values is &gamma; non-zero (each element is decreased by one unit during compression and corrected during decompression). Furthermore, since the sum of the sizes of all chunks is the out-degree of the node, the value is saved for all chunks except the last one, as it can be derived by the out-degree and the sum of the sizes of the other chunks.
 * Bitstream index: this is possibly the most expensive of these values given that a bigger graph would have many nodes and the index to access the lower level bitstream would also increase quickly. We could always store the difference with the previous index but the graph should have fast random access and this would make it impossible. We can, however, save the difference within a single posting list. The first index would be written explicitly and the following ones are stored as the difference with the previous one. Furthermore, if a chunk shuold save *n* elements in a universe of size *n* there's no need to store any value and the index is omitted. In the same way, if a chunk is compressed using a bitvector, the difference between the indexes is known: it's the size of the bitvector. Given this reasoning, the index is always stored for the first chunk, and then for only the chunks compressed with Elias-Fano. Before the compression, the distribution of these values had unique elements, while the following is the distribution of values after this strategy was set in place.
 
-<!--![offset-rel](offset.png)-->
+![offset-rel](offset.png)
 
 ### [Accessing the compressed graph](src/it/unimi/dsi/webgraph/PEFGraph.java#L1514)
 
